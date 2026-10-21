@@ -32,6 +32,22 @@ Rulat de două ori nu dublează nimic.
 În `yasb_palette.py` adaugă `--warn` (galbenul pentru valori peste prag), cu aceeași verificare de contrast ca `--accent`.
 Până atunci, `styles.css` are o valoare de rezervă.
 
+## Instalare
+
+Dublu-click pe **`instalare.bat`**. Atât.
+
+Nu o porni ca Administrator: fișierele ar ajunge să aparțină altui cont decât cel care
+folosește bara. Singurul pas care chiar cere drepturi (HWiNFO) și le cere singur, când e cazul.
+Fereastra rămâne deschisă la final, ca să poți citi ce a ieșit.
+
+Aceleași opțiuni merg și de acolo:
+
+```
+instalare.bat -YasbRef main        # trece pe altă versiune YASB
+instalare.bat -NoHWiNFO            # sare peste configurarea HWiNFO
+instalare.bat -YasbPath "D:\dev\yasb"
+```
+
 ## Înainte să pornească bara
 
 Instalarea nu mai pleacă de pe ultima versiune YASB. Rămâne pe commit-ul pe care bara chiar a mers,
@@ -74,7 +90,7 @@ py -3.14 tests\run.py            # toate
 py -3.14 tests\run.py layout     # doar un fișier
 ```
 
-230 de verificări, fără Windows, fără PyQt6 și fără pytest: `tests/stubs.py` pune module înlocuitoare
+241 de verificări, fără Windows, fără PyQt6 și fără pytest: `tests/stubs.py` pune module înlocuitoare
 pentru Qt și pentru modulele YASB, ca logica barei să ruleze neschimbată. Rulează singure la fiecare
 modificare (`.github/workflows/tests.yml`). Ce NU acoperă: desenarea propriu-zisă și apelurile către
 Windows și COM.
