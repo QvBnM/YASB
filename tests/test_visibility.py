@@ -13,13 +13,16 @@ import stubs
 stubs.install()
 
 from core.widgets.yasb.mint_visibility import (  # noqa: E402
+    ESCAPE_LIMIT,
     MODE,
     SELF,
     SPACE,
     effective,
+    escaped,
     hidden_by,
     is_visible,
     request,
+    self_managed,
     wants,
 )
 
@@ -172,3 +175,77 @@ class TestResponsiveCooperation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SelfShowing(FakeWidget):
+    """
+    Widget-ul care se arată singur.
+
+    Placa video din YASB cheamă `show()` la fiecare citire proprie, dacă are ce afișa. Până
+    acum noi credeam că l-am ascuns, el se vedea, iar socoteala de loc rămânea greșită la
+    nesfârșit: scădeam un widget care de fapt ocupa loc, deci ascundeam altele degeaba.
+    """
+
+    def poll(self) -> None:
+        self._hidden = False
+
+
+class TestEscape(unittest.TestCase):
+    def test_a_widget_that_shows_itself_again_is_noticed(self):
+        w = SelfShowing()
+        request(w, SPACE, False)
+        self.assertTrue(w.isHidden())
+        w.poll()
+        self.assertTrue(escaped(w), "nu a observat că widget-ul se vede")
+
+    def test_our_opinion_is_dropped_so_the_arithmetic_is_right_again(self):
+        w = SelfShowing()
+        request(w, SPACE, False)
+        w.poll()
+        escaped(w)
+        self.assertTrue(wants(w, SPACE), "încă socotim că l-am ascuns, deși se vede")
+
+    def test_someone_elses_opinion_survives(self):
+        """Dacă un mod îl voia ascuns și el s-a arătat oricum, părerea modului nu e respectată."""
+        w = SelfShowing()
+        request(w, MODE, False)
+        w.poll()
+        escaped(w)
+        self.assertTrue(wants(w, MODE))
+
+    def test_it_is_reported_only_once_per_escape(self):
+        w = SelfShowing()
+        request(w, SPACE, False)
+        w.poll()
+        self.assertTrue(escaped(w))
+        self.assertFalse(escaped(w), "ar scrie în jurnal la fiecare secundă")
+
+    def test_after_a_few_tries_we_leave_it_alone(self):
+        w = SelfShowing()
+        for _ in range(ESCAPE_LIMIT):
+            request(w, SPACE, False)
+            w.poll()
+            escaped(w)
+        self.assertTrue(self_managed(w))
+        w.calls.clear()
+        self.assertFalse(request(w, SPACE, False), "încearcă din nou să ascundă ceva ce nu se lasă")
+        self.assertEqual(w.calls, [])
+        self.assertTrue(wants(w, SPACE), "a rămas o părere falsă în stare")
+
+    def test_a_widget_that_stays_hidden_is_not_an_escape(self):
+        w = FakeWidget()
+        request(w, SPACE, False)
+        self.assertFalse(escaped(w))
+        self.assertFalse(self_managed(w))
+
+    def test_a_widget_hidden_by_someone_else_is_not_our_escape(self):
+        """YASB îl ascunde singur (media fără melodie), apoi îl arată: nu e treaba noastră."""
+        w = FakeWidget(visible=False)
+        request(w, SPACE, False)  # noi nu l-am ascuns: era deja ascuns
+        w._hidden = False
+        self.assertFalse(escaped(w))
+
+    def test_a_destroyed_widget_does_not_crash(self):
+        w = Destroyed()
+        request(w, SPACE, False)
+        self.assertFalse(escaped(w))

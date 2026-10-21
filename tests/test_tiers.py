@@ -14,7 +14,7 @@ import stubs
 stubs.install()
 
 from core.validation.widgets.yasb.responsive import TIERS, TierThresholds  # noqa: E402
-from core.widgets.yasb.responsive import UNIT_HIDDEN, at_or_below, plan, tier_for, units_to_change  # noqa: E402
+from core.widgets.yasb.responsive import UNIT_HIDDEN, at_or_below, plan_bar, tier_for, units_to_change  # noqa: E402
 
 TH = TierThresholds()
 
@@ -114,7 +114,8 @@ class TestTiersAndHiding(unittest.TestCase):
         room = room_on_one_side(1100)
         self.assertEqual(tier_for(room, TH), "dense")
         order = [("tray", 120, False), ("weather", 90, False), ("ram", 70, False)]
-        to_hide, _ = plan(need=500, avail=room, order=order, hysteresis=24)
+        sides = {"left": (300, []), "right": (800, order)}
+        to_hide, _ = plan_bar(budget=1100 - 16, fixed=150, sides=sides, hysteresis=24)
         self.assertTrue(to_hide, "pe o bară strâmtă ceva tot trebuie să dispară")
 
     def test_units_are_dropped_from_dense_down(self):

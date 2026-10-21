@@ -38,6 +38,7 @@ from PyQt6.QtWidgets import (
 from core.utils.utilities import PopupWidget
 from core.validation.widgets.yasb.wallpaper_palette import WallpaperPaletteConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.mint_common import contrast, ensure_contrast, fill_labels, from_hls, mix, rgb_to_hex, to_hls
 
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
@@ -252,6 +253,7 @@ class WallpaperPaletteWidget(BaseWidget):
         self._cards: dict[str, _Card] = {}
         self._popup: PopupWidget | None = None
         self._worker: threading.Thread | None = None
+        self._complained: set[str] = set()
         self._auto = config.auto_change
 
         self._init_container()
@@ -281,9 +283,21 @@ class WallpaperPaletteWidget(BaseWidget):
                 for entry in sorted(os.scandir(root), key=lambda e: e.name.lower()):
                     if entry.is_file() and os.path.splitext(entry.name)[1].lower() in IMAGE_EXT:
                         out.append(os.path.abspath(entry.path))
+            except FileNotFoundError:
+                self._complain(root, "nu exista folderul %s: fie il creezi, fie schimbi image_path")
             except OSError:
-                logging.warning("wallpaper_palette: nu pot citi folderul %s", root)
-        return out[: self.config.max_images]
+                self._complain(root, "nu pot citi folderul %s")
+        images = out[: self.config.max_images]
+        # Fara nicio imagine, butonul nu are ce deschide: se da la o parte singur (vezi arbitrul).
+        visibility.request(self, visibility.SELF, bool(images))
+        return images
+
+    def _complain(self, root: str, message: str) -> None:
+        """Acelasi folder lipsa nu se scrie in jurnal la fiecare masuratoare, doar o data."""
+        if root in self._complained:
+            return
+        self._complained.add(root)
+        logging.warning("wallpaper_palette: " + message, root)
 
     def _precompute(self) -> None:
         if self._worker is not None and self._worker.is_alive():

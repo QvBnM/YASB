@@ -27,6 +27,10 @@ OWNERS = (MODE, SPACE, SELF)
 
 _STATE = "_mint_visibility"
 _OURS = "__ours"  # noi l-am ascuns, deci tot noi avem voie sa-l aratam
+_ESCAPES = "__escapes"  # de cate ori s-a aratat singur dupa ce l-am ascuns
+_SELF_MANAGED = "__self_managed"  # se ocupa singur de vizibilitate: nu-l mai atingem
+
+ESCAPE_LIMIT = 2  # dupa atatea incercari pierdute, renuntam definitiv
 
 
 def effective(state: dict[str, bool]) -> bool:
@@ -68,10 +72,50 @@ def request(widget, owner: str, visible: bool) -> bool:
     costa si nu produce palpairi.
     """
     state = state_of(widget)
+    if not visible and state.get(_SELF_MANAGED):
+        return False  # nu mai pretindem ca il ascundem: n-ar fi adevarat
     if state.get(owner) == visible:
         return False
     state[owner] = visible
     return apply(widget)
+
+
+def self_managed(widget) -> bool:
+    """Widget-ul care si-a luat singur vizibilitatea in mana. Nu-l mai socotim al nostru."""
+    return bool(state_of(widget).get(_SELF_MANAGED))
+
+
+def escaped(widget) -> bool:
+    """
+    L-am ascuns noi, dar el se vede. Inseamna ca se arata singur.
+
+    Unele widget-uri YASB cheama show() la fiecare masuratoare proprie, daca au ce afisa:
+    placa video o face la fiecare citire. Pana acum starea noastra spunea "ascuns" iar ecranul
+    arata altceva, deci socoteala de loc ramanea greuata la nesfarsit: scadeam un widget care
+    de fapt ocupa loc, deci ascundeam altele degeaba, iar lista de la capatul barei pomenea
+    lucruri care se vedeau.
+
+    Aici recunoastem ca am pierdut: stergem parerile care cereau ascunderea (ele oricum nu sunt
+    respectate), iar dupa cateva incercari il lasam definitiv in pace. Intoarce True o singura
+    data per scapare, ca sa se poata scrie in jurnal.
+    """
+    state = state_of(widget)
+    if not state.get(_OURS):
+        return False
+    try:
+        if widget.isHidden():
+            return False
+    except RuntimeError:
+        return False
+    state.pop(_OURS, None)
+    for owner in OWNERS:
+        if state.get(owner) is False:
+            del state[owner]
+    count = state.get(_ESCAPES, 0) + 1
+    state[_ESCAPES] = count
+    if count >= ESCAPE_LIMIT:
+        state[_SELF_MANAGED] = True
+    return True
 
 
 def apply(widget) -> bool:
@@ -84,6 +128,8 @@ def apply(widget) -> bool:
     """
     state = state_of(widget)
     wanted = effective(state)
+    if not wanted and state.get(_SELF_MANAGED):
+        return False
     try:
         # isHidden() spune daca a fost ascuns anume, nu daca il acopera un parinte ascuns:
         # exact ce ne trebuie, altfel am rescrie starea de fiecare data cand bara e ascunsa.

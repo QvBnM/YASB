@@ -1,10 +1,10 @@
 """
 Responsive bar: the same config on a 2560 px PC and a 1920 px laptop at 125 % (1536 px for Qt).
 
-Invisible widget, one per bar. Every second it measures the room each side has next to the
-clock (the center stays exactly in the middle) and, when a side does not fit, hides that
-side's least important widgets in the configured order; they come back as soon as there is
-room again. Only widgets it hid itself are ever shown again, so widgets that hide on their own
+Invisible widget, one per bar. Every second it measures what the three columns need and, when
+that is more than the bar is wide, hides the least important widgets of the side that asks for
+the most room, in the configured order; they come back one by one as soon as there is room
+again. Only widgets it hid itself are ever shown again, so widgets that hide on their own
 (Bluetooth without a radio, the visualizer without music, modes) are left alone.
 The bar also gets a tier class (tier-full / tier-normal / tier-dense / tier-min) chosen from
 the room left beside the clock, which styles.css uses for tighter spacing and smaller text.
@@ -27,34 +27,53 @@ from core.widgets.yasb.bar_overflow import HIDDEN_EVENT
 from core.widgets.yasb.mint_common import all_bar_widgets, find_named, make_invisible, refresh_tree, set_class_token
 
 
-def plan(need: int, avail: int, order: list[tuple[str, int, bool]], hysteresis: int) -> tuple[list[str], list[str]]:
-    """Which widgets to hide / show for one side.
+Entry = tuple[str, int, bool]  # name, width in px, hidden by us
 
-    need  = width the side needs now (visible widgets only)
-    avail = width the side may use
-    order = (name, width, hidden_by_us) in hide order (first = least important)
-    Returns (to_hide, to_show).
+
+def plan_bar(budget: int, fixed: int, sides: dict[str, tuple[int, list[Entry]]], hysteresis: int) -> tuple[list[str], list[str]]:
     """
+    Ce dispare si ce se intoarce, socotit pe toata bara.
+
+    budget = latimea barei, minus marginea
+    fixed  = cat cer coloanele de care nu ne ocupam (mijlocul)
+    sides  = {"left": (cat cere coloana, ordinea de ascundere), "right": (...)}
+             ordinea incepe cu cel mai putin important.
+
+    Prima versiune socotea fiecare latura separat, cu (latime - ceas) / 2 de fiecare parte:
+    adica cerea ca ceasul sa stea exact la mijloc. Pe bara ta, cu partea dreapta mult mai
+    incarcata, iesea ca dreapta are 682 px si cere mai mult, asa ca ascundea sase widget-uri
+    degeaba — bara, de fapt, incapea. Qt oricum nu centreaza coloana din mijloc: cele trei
+    coloane isi iau locul dupa cat au nevoie. Deci socotim o singura data, pe toata bara, si
+    ascundem numai atat cat lipseste — de partea care cere mai mult.
+    """
+    needs = {key: need for key, (need, _order) in sides.items()}
+    queues = {key: [e for e in order if not e[2] and e[1] > 0] for key, (_need, order) in sides.items()}
     to_hide: list[str] = []
-    to_show: list[str] = []
-    if need > avail:
-        for name, width, hidden in order:
-            if need <= avail:
-                break
-            if not hidden and width > 0:
-                to_hide.append(name)
-                need -= width
-        return to_hide, to_show
-    # room to spare: bring back the most important hidden ones first (reverse order)
-    for name, width, hidden in reversed(order):
-        if not hidden:
-            continue
-        if need + width + hysteresis <= avail:
-            to_show.append(name)
-            need += width
-        else:
-            break  # keep the order: never show a less important one before a more important one
-    return to_hide, to_show
+    total = fixed + sum(needs.values())
+    while total > budget:
+        side = max((k for k in queues if queues[k]), key=lambda k: needs[k], default=None)
+        if side is None:
+            break  # nu mai avem ce ascunde: bara rabufneste, dar nu mai putem face nimic
+        name, width, _ = queues[side].pop(0)
+        to_hide.append(name)
+        needs[side] -= width
+        total -= width
+    if to_hide:
+        return to_hide, []
+    # A mai ramas loc: aducem inapoi un singur widget pe masuratoare, cel mai important din
+    # cele ascunse de pe fiecare latura, si doar daca incape cu rezerva. Unul singur, ca sa
+    # fie masurat din nou inainte de urmatorul: asa nu se intoarce un val intreg care nu incape.
+    slack = budget - total
+    candidates: list[Entry] = []
+    for _need, order in sides.values():
+        mine = [e for e in order if e[2]]
+        if mine:
+            candidates.append(mine[-1])  # ultimul din ordine = cel mai important
+    candidates.sort(key=lambda e: e[1])  # cel mai ingust intai: are cele mai mari sanse sa ramana
+    for name, width, _ in candidates:
+        if width + hysteresis <= slack:
+            return [], [name]
+    return [], []
 
 
 def tier_for(room: int, thresholds: TierThresholds, portrait: bool = False, portrait_max: str = "dense") -> str:
@@ -92,6 +111,7 @@ def at_or_below(tier: str, limit: str) -> bool:
 
 
 UNIT_HIDDEN = "_mint_unit_hidden"
+LAST_WIDTH = "_mint_last_width"  # cat ocupa widget-ul cand se vedea ultima data
 
 
 def units_to_change(labels, show: bool) -> tuple[list, list]:
@@ -267,26 +287,30 @@ class ResponsiveWidget(BaseWidget):
         clock = found.get("clock")
         center_col = self._column(clock, frame) if clock is not None else None
         center_w = self._hint(center_col) if center_col is not None else 0
-        avail = (width - center_w) // 2 - self.config.margin
-        self._apply_tier(frame, avail)
+        # Nivelul (cat de mare e scrisul, cat de strans e spatiul) se ia din locul de pe o
+        # latura: e masura "cat de inghesuita e bara", independenta de rezolutie si de scalare.
+        self._apply_tier(frame, (width - center_w) // 2 - self.config.margin)
         overflow = self._overflow(root)
 
-        for side in (self.config.hide_left, self.config.hide_right):
+        budget = width - self.config.margin
+        sides: dict[str, tuple[int, list[Entry]]] = {}
+        columns: dict[str, QWidget] = {}
+        for key, side in (("left", self.config.hide_left), ("right", self.config.hide_right)):
             widgets = [(n, found[n]) for n in side if n in found]
             if not widgets:
                 continue
             column = self._column(widgets[0][1], frame)
             if column is None:
                 continue
+            columns[key] = column
             need = self._hint(column)
-            side_room = avail
             # The arrow at the end of the bar appears exactly when we hide something, and it
             # takes room itself — so it could cause the very hiding that made it appear, and
             # then oscillate as things come back. We keep its room reserved either way, and
             # leave it out of the measurement, so it never enters the arithmetic.
             if overflow is not None and self._column(overflow, frame) is column:
                 reserve = self._hint(overflow)
-                side_room -= reserve
+                budget -= reserve
                 if not overflow.isHidden():
                     need = max(0, need - max(reserve, overflow.width()))
             # flexible widgets (the window title) only count with their minimum
@@ -294,28 +318,71 @@ class ResponsiveWidget(BaseWidget):
                 fw = found.get(name)
                 if fw is not None and not fw.isHidden() and self._column(fw, frame) is column:
                     need += minimum - self._hint(fw)
-            order = []
-            for name, w in widgets:
-                # a widget a mode hid, or that hid itself for want of data, is not ours to manage:
-                # we only ever decide about room (see mint_visibility)
-                if not (visibility.wants(w, visibility.MODE) and visibility.wants(w, visibility.SELF)):
-                    continue
-                hidden_by_us = not visibility.wants(w, visibility.SPACE)
-                if w.isHidden() and not hidden_by_us:
-                    continue  # hidden by YASB itself (media with hide_empty): not ours either
-                order.append(
-                    (name, self._hint(w) if hidden_by_us else max(1, w.width() or self._hint(w)), hidden_by_us)
-                )
-            to_hide, to_show = plan(need, side_room, order, self.config.hysteresis)
-            for name in to_hide:
-                visibility.request(found[name], visibility.SPACE, False)
-            for name in to_show:
-                visibility.request(found[name], visibility.SPACE, True)
-            if to_hide or to_show:
-                logging.info(
-                    "responsive: bar %dpx, side room %dpx -> hidden %s, shown %s", width, side_room, to_hide, to_show
-                )
+            sides[key] = (need, self._order(widgets))
+
+        # coloanele de care nu ne ocupam (mijlocul, si o latura fara widget-uri de ascuns)
+        fixed = sum(self._hint(c) for c in self._columns(frame) if c not in columns.values())
+        if not sides:
+            self._announce(found)
+            return
+        to_hide, to_show = plan_bar(budget, fixed, sides, self.config.hysteresis)
+        for name in to_hide:
+            visibility.request(found[name], visibility.SPACE, False)
+        for name in to_show:
+            visibility.request(found[name], visibility.SPACE, True)
+        if to_hide or to_show:
+            logging.info(
+                "responsive: bara %dpx, loc %dpx, cerut %dpx -> ascuns %s, aratat %s",
+                width,
+                budget,
+                fixed + sum(need for need, _ in sides.values()),
+                to_hide,
+                to_show,
+            )
         self._announce(found)
+
+    def _columns(self, frame: QWidget) -> list[QWidget]:
+        """Cele trei coloane ale barei (stanga / mijloc / dreapta), copii direcți ai cadrului."""
+        return [
+            w
+            for w in frame.findChildren(QWidget)
+            if w.parentWidget() is frame and "container" in (w.property("class") or "").split()
+        ]
+
+    def _order(self, widgets: list[tuple[str, QWidget]]) -> list[Entry]:
+        """Ordinea de ascundere a unei laturi, cu latimea pe care o ocupa fiecare."""
+        order: list[Entry] = []
+        for name, w in widgets:
+            if visibility.escaped(w):
+                logging.info("responsive: %s se arata singur; nu mai socotesc ca l-am ascuns", name)
+            if visibility.self_managed(w):
+                continue  # se ocupa singur: ocupa loc si il lasam in pace
+            # a widget a mode hid, or that hid itself for want of data, is not ours to manage:
+            # we only ever decide about room (see mint_visibility)
+            if not (visibility.wants(w, visibility.MODE) and visibility.wants(w, visibility.SELF)):
+                continue
+            hidden_by_us = not visibility.wants(w, visibility.SPACE)
+            if w.isHidden() and not hidden_by_us:
+                continue  # hidden by YASB itself (media with hide_empty): not ours either
+            order.append((name, self._width_of(w, hidden_by_us), hidden_by_us))
+        return order
+
+    @staticmethod
+    def _width_of(w: QWidget, hidden_by_us: bool) -> int:
+        """
+        Cat loc ocupa widget-ul — aceeasi cifra la ascundere si la intoarcere.
+
+        Ascuns, un widget nu mai are latime, iar sizeHint-ul lui iese alta cifra decat cat
+        ocupa de fapt pe bara. De aici palpairea din jurnal: scadeam 90 px cand il ascundeam
+        si socoteam 60 px cand verificam daca incape, deci incapea, il aduceam inapoi, nu
+        incapea, il ascundeam din nou — la fiecare secunda. Acum tinem minte latimea reala de
+        dinainte de ascundere si o folosim pe ea.
+        """
+        if not hidden_by_us:
+            real = max(1, w.width() or ResponsiveWidget._hint(w))
+            setattr(w, LAST_WIDTH, real)
+            return real
+        return getattr(w, LAST_WIDTH, 0) or ResponsiveWidget._hint(w)
 
     def _announce(self, found: dict[str, QWidget]) -> None:
         """
