@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import Field
 
 from core.validation.widgets.base_model import CustomBaseModel
@@ -53,4 +55,9 @@ class UiPolishConfig(CustomBaseModel):
     extra_strings: dict[str, str] = {}  # se adauga peste cele implicite
     patterns: list[PatternRule] = DEFAULT_PATTERNS
     calendar: CalendarPolishConfig = CalendarPolishConfig()
+    # Butoanele de media din bara. YASB le face mereu pe toate trei si nu are setare pentru
+    # asta, iar din stiluri nu se poate: Qt nu cunoaste "display: none".
+    #   all       = inapoi | play/pauza | inainte
+    #   play-only = doar play/pauza (castigi locul celorlalte doua)
+    media_buttons: Literal["all", "play-only"] = "all"
     max_label_scan: int = Field(default=400, ge=50)

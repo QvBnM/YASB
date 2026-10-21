@@ -34,6 +34,7 @@ from mint_check import (  # noqa: E402
     Report,
     contract_problems,
     css_used_names,
+    duplicate_keys,
     hardcoded_colours,
     load_config,
     missing_references,
@@ -149,11 +150,13 @@ def check_contract(yasb: Path | None) -> Report:
     return r
 
 
-def check_config(cfg: dict, yasb: Path | None) -> Report:
+def check_config(cfg: dict, yasb: Path | None, config_text: str = "") -> Report:
     r = Report("config.yaml")
     widgets = cfg.get("widgets", {}) or {}
     r.note(f"{len(widgets)} widget-uri configurate")
 
+    for item in duplicate_keys(config_text):
+        r.problem(f"setare scrisă de două ori (doar ultima contează): {item}")
     for item in missing_references(cfg):
         r.problem(f"widget numit dar inexistent: {item}")
     for item in widgets_placed_twice(cfg):
@@ -305,6 +308,7 @@ def main(argv: list[str] | None = None) -> int:
     config_dir = Path(args.config).resolve() if args.config else CONFIG_DIR
 
     try:
+        config_text = (config_dir / "config.yaml").read_text(encoding="utf-8")
         cfg = load_config(config_dir / "config.yaml")
     except Exception as exc:
         print(f"Nu pot citi {config_dir / 'config.yaml'}: {exc}")
@@ -314,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
         check_python(),
         check_yasb_version(yasb),
         check_contract(yasb),
-        check_config(cfg, yasb),
+        check_config(cfg, yasb, config_text),
         check_styles(config_dir),
         check_tools(),
     ]

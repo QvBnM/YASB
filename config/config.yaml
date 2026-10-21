@@ -95,9 +95,11 @@ widgets:
       hidden_by_default: ["git_branch", "focus", "fps", "latency"]
       mic_ignore: ["python", "pythonw"]   # YASB insusi (vizualizatorul asculta sunetul); adauga ex. "Audacity"
       modes:
+        # In apel bara ramane intreaga: vezi mai departe ce asculti si poti da pauza fara
+        # sa iesi din apel. Modul doar porneste cronometrul si stinge putin ora (styles.css).
         - name: "call"              # o aplicatie inregistreaza de la microfon
           mic_in_use: true
-          hide: ["clock_date", "media_group", "sys_group"]
+          hide: []
         - name: "game"              # jocul din fereastra activa (in fullscreen bara trece in spatele jocului)
           processes: ["eldenring.exe", "cs2.exe", "VALORANT-Win64-Shipping.exe", "RocketLeague.exe"]
           hide: ["media_group", "active_window", "weather", "launcher", "notif"]
@@ -144,6 +146,7 @@ widgets:
   ui_ro:
     type: "yasb.ui_polish.UiPolishWidget"
     options:
+      media_buttons: "play-only"    # doar play/pauza in bara; inapoi/inainte raman in popup
       calendar:
         country_code: "RO"
 

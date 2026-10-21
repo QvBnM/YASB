@@ -27,6 +27,7 @@ from mint_check import (  # noqa: E402
     CONTRACT_ATTRIBUTES,
     contract_problems,
     css_used_names,
+    duplicate_keys,
     hardcoded_colours,
     load_config,
     missing_references,
@@ -299,3 +300,32 @@ class TestContract(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDuplicateKeys(unittest.TestCase):
+    """
+    Aceeași cheie scrisă de două ori în același loc.
+
+    YAML nu se plânge: păstrează tăcut ultima și o aruncă pe prima. Scrii o setare, o vezi
+    în fișier, și ea nu face nimic. Mi s-a întâmplat exact asta: am pus un `options:` nou
+    sub `ui_ro`, care avea deja unul, iar setarea nouă a fost înghițită — și nicio
+    verificare n-a zis nimic.
+    """
+
+    def test_the_real_config_has_none(self):
+        text = (REPO / "config" / "config.yaml").read_text(encoding="utf-8")
+        self.assertEqual(duplicate_keys(text), [])
+
+    def test_it_catches_a_repeated_key(self):
+        text = "widgets:\n  a:\n    options:\n      x: 1\n    options:\n      y: 2\n"
+        found = duplicate_keys(text)
+        self.assertEqual(len(found), 1)
+        self.assertIn("widgets.a.options", found[0])
+
+    def test_the_same_key_in_different_places_is_fine(self):
+        text = "widgets:\n  a:\n    options:\n      x: 1\n  b:\n    options:\n      x: 2\n"
+        self.assertEqual(duplicate_keys(text), [])
+
+    def test_it_looks_inside_lists_too(self):
+        text = "modes:\n  - name: call\n    hide: []\n    hide: [x]\n"
+        self.assertTrue(duplicate_keys(text))

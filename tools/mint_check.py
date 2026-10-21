@@ -51,6 +51,37 @@ def load_config(path: Path | None = None) -> dict:
     return yaml.safe_load((path or CONFIG_DIR / "config.yaml").read_text(encoding="utf-8")) or {}
 
 
+def duplicate_keys(text: str) -> list[str]:
+    """
+    Aceeași cheie scrisă de două ori în același loc.
+
+    YAML nu se plânge: păstrează tăcut ultima și o aruncă pe prima. Adică scrii o setare,
+    o vezi în fișier, și ea nu face nimic. (Mi s-a întâmplat exact asta: două `options:`
+    sub același widget, iar prima — cea nouă — a fost înghițită.)
+    """
+    import yaml
+
+    found: list[str] = []
+
+    def walk(node, path: str = "") -> None:
+        if isinstance(node, yaml.MappingNode):
+            seen: dict[str, int] = {}
+            for key_node, value_node in node.value:
+                key = str(getattr(key_node, "value", key_node))
+                where = f"{path}.{key}" if path else key
+                line = key_node.start_mark.line + 1
+                if key in seen:
+                    found.append(f"{where} (linia {line}, scrisă deja la linia {seen[key]})")
+                seen[key] = line
+                walk(value_node, where)
+        elif isinstance(node, yaml.SequenceNode):
+            for i, item in enumerate(node.value):
+                walk(item, f"{path}[{i}]")
+
+    walk(yaml.compose(text))
+    return found
+
+
 def _options(cfg: dict, name: str) -> dict:
     return (cfg.get("widgets", {}).get(name, {}) or {}).get("options", {}) or {}
 

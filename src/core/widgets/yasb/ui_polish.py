@@ -1,12 +1,17 @@
 """
 Popup-urile YASB in romana si calendarul mai usor de citit, fara sa modifici codul YASB.
 
-Widget invizibil. Asculta cand apare o fereastra (popup, meniu) si:
+Widget invizibil. Repara lucruri din interfata YASB care nu se pot face din stiluri.
+
+Asculta cand apare o fereastra (popup, meniu) si:
   - traduce textele fixe din YASB ("WiFi Networks", "Set Alarm", "Week 43"...),
     inclusiv cand widget-ul le rescrie mai tarziu;
   - in calendar: zilele din alte luni se sting, weekendul are alta nuanta,
     sarbatorile au culoarea din paleta si nume intregi, iar randul gol pentru
     sarbatoarea zilei arata cat mai e pana la urmatoarea zi libera.
+
+Si, daca e cerut din config, lasa din butoanele de media doar play/pauza: YASB le face
+mereu pe toate trei, nu are setare pentru asta, iar Qt nu cunoaste "display: none".
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ from PyQt6.QtWidgets import QAbstractButton, QApplication, QLabel, QMenu, QWidge
 from core.validation.widgets.yasb.ui_polish import UiPolishConfig
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_text
-from core.widgets.yasb.mint_common import PaletteWatcher, make_invisible, ro_day_month, ro_days
+from core.widgets.yasb.mint_common import PaletteWatcher, all_bar_widgets, make_invisible, ro_day_month, ro_days
 
 _PATCHED_CALENDAR = False
 _CAL_COLORS: dict[str, str] = {}
@@ -129,6 +134,30 @@ def _patch_calendar() -> None:
     _PATCHED_CALENDAR = True
 
 
+SKIP_HIDDEN = "_mint_skip_hidden"
+
+
+def skip_buttons(widget) -> list:
+    """Butoanele „inapoi" si „inainte" ale unui widget de media, daca le are."""
+    found = []
+    for attr in ("_prev_label", "_next_label"):
+        button = getattr(widget, attr, None)
+        if button is not None:
+            found.append(button)
+    return found
+
+
+def to_trim(widgets) -> list:
+    """Ce butoane mai sunt de ascuns. Pe cele ascunse de noi nu le mai atingem a doua oara."""
+    out = []
+    for w in widgets:
+        for button in skip_buttons(w):
+            if getattr(button, SKIP_HIDDEN, False):
+                continue
+            out.append(button)
+    return out
+
+
 class UiPolishWidget(BaseWidget):
     validation_schema = UiPolishConfig
 
@@ -146,6 +175,21 @@ class UiPolishWidget(BaseWidget):
             _FILTER_INSTANCES.append(self)
         _claim_event_filter()
         self.destroyed.connect(lambda *_: _claim_event_filter())
+        if config.media_buttons == "play-only":
+            # media se construieste odata cu bara; a doua trecere prinde o bara pornita mai greu
+            QTimer.singleShot(0, self._trim_media)
+            QTimer.singleShot(2500, self._trim_media)
+
+    def _trim_media(self) -> None:
+        root = self.window()
+        if root is None or root is self:
+            return
+        for button in to_trim(all_bar_widgets(root)):
+            try:
+                setattr(button, SKIP_HIDDEN, True)
+                button.setVisible(False)
+            except RuntimeError:
+                pass  # widget-ul a disparut intre timp
 
     def _on_palette(self, colors: dict[str, str]) -> None:
         c = self.config.calendar

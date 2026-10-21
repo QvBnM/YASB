@@ -263,3 +263,53 @@ class TestHolidays(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMediaButtons(unittest.TestCase):
+    """
+    În bară rămâne doar play/pauza; „înapoi" și „înainte" ocupau loc degeaba.
+
+    YASB le face mereu pe toate trei și nu are setare pentru asta, iar din stiluri nu se
+    poate: Qt nu cunoaște „display: none". Deci le ascundem din cod, o singură dată.
+    """
+
+    class FakeButton:
+        def __init__(self):
+            self.hidden = False
+
+        def setVisible(self, visible):  # noqa: N802 - nume Qt
+            self.hidden = not visible
+
+    class FakeMedia:
+        def __init__(self, prev, nxt):
+            self._prev_label = prev
+            self._next_label = nxt
+
+    def test_it_finds_the_two_buttons(self):
+        from core.widgets.yasb.ui_polish import skip_buttons
+
+        prev, nxt = self.FakeButton(), self.FakeButton()
+        self.assertEqual(skip_buttons(self.FakeMedia(prev, nxt)), [prev, nxt])
+
+    def test_a_widget_without_them_is_left_alone(self):
+        from core.widgets.yasb.ui_polish import skip_buttons
+
+        self.assertEqual(skip_buttons(object()), [])
+
+    def test_the_play_button_is_never_touched(self):
+        from core.widgets.yasb.ui_polish import skip_buttons
+
+        media = self.FakeMedia(self.FakeButton(), self.FakeButton())
+        media._play_label = self.FakeButton()
+        self.assertNotIn(media._play_label, skip_buttons(media))
+
+    def test_once_hidden_we_do_not_come_back(self):
+        """A doua trecere nu mai are ce face: altfel ne-am bate cu widget-ul la fiecare pornire."""
+        from core.widgets.yasb.ui_polish import SKIP_HIDDEN, to_trim
+
+        media = self.FakeMedia(self.FakeButton(), self.FakeButton())
+        first = to_trim([media])
+        self.assertEqual(len(first), 2)
+        for button in first:
+            setattr(button, SKIP_HIDDEN, True)
+        self.assertEqual(to_trim([media]), [])
