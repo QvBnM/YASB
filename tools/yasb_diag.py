@@ -148,7 +148,10 @@ def main() -> None:
         print(f"[{i}] {mi.szDevice} {'PRINCIPAL ' if mi.dwFlags & 1 else ''}scalare {dpi * 100 // 96}%")
         print(f"    monitor: {r(m)}")
         print(f"    work   : {r(w)}")
-        print(f"    rezervat: sus {w.top - m.top}px, jos {m.bottom - w.bottom}px, stanga {w.left - m.left}px, dreapta {m.right - w.right}px")
+        print(
+            f"    rezervat: sus {w.top - m.top}px, jos {m.bottom - w.bottom}px, "
+            f"stanga {w.left - m.left}px, dreapta {m.right - w.right}px"
+        )
         if w.top == m.top:
             print("    !!! sus NU e rezervat nimic -> ferestrele maximizate intra sub bara")
 
@@ -161,7 +164,8 @@ def main() -> None:
     print(f"autohide: {'DA' if state & 1 else 'nu'} | margine: {edges.get(abd.uEdge, abd.uEdge)} | {r(abd.rc)}")
 
     bars = [h for h in top_windows() if title(h) == "YasbBar"]
-    print(f"\n=== YASB: {len(bars)} ferestre de bara gasite" + ("" if bars else " -> YASB nu ruleaza sau nu a creat bara") + " ===")
+    lipsa = "" if bars else " -> YASB nu ruleaza sau nu a creat bara"
+    print(f"\n=== YASB: {len(bars)} ferestre de bara gasite{lipsa} ===")
     print("\n=== FERESTRE (de sus in jos, in ordinea de pe ecran) ===")
     fg = user32.GetForegroundWindow()
     shown = 0

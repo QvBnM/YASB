@@ -36,7 +36,7 @@ def dominant_color(image, min_saturation: float = 0.18) -> str | None:
     best, best_score = None, -1.0
     for count, idx in q.getcolors() or []:
         r, g, b = palette[idx * 3 : idx * 3 + 3]
-        h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+        _h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
         if s < min_saturation or l < 0.22 or l > 0.92:
             continue  # fundalurile foarte inchise / albe nu sunt "culoarea" copertei
         # radacina din numarul de pixeli: subiectul viu castiga in fata unui fundal mare si sters

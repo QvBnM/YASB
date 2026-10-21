@@ -106,7 +106,7 @@ class LatencyWidget(BaseWidget):
         self._render()
 
     def _measure(self) -> None:
-        if self._busy or not self.isVisible() and self._last is not None:
+        if self._busy or (not self.isVisible() and self._last is not None):
             return
         self._busy = True
 

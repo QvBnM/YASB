@@ -218,7 +218,7 @@ class _Card(QFrame):
                     Qt.TransformationMode.SmoothTransformation,
                 )
             )
-        for f, color in zip(self._sw, item["swatches"]):
+        for f, color in zip(self._sw, item["swatches"], strict=False):
             f.setStyleSheet(f"background-color: {color}; border: none;")
         shift = item.get("accent_shift", 0)
         if shift >= 0.03:

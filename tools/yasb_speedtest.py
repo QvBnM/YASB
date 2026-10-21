@@ -83,7 +83,7 @@ def status() -> dict:
 
 def _single_instance():
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    handle = open(CACHE_DIR / "speedtest.lock", "a+")
+    handle = open(CACHE_DIR / "speedtest.lock", "a+")  # noqa: SIM115 - ramane deschis cat ruleaza
     try:
         if os.name == "nt":
             import msvcrt
@@ -315,7 +315,8 @@ def run(verbose: bool = False) -> int:
         _write({"state": "ok", **result, "finished": time.time()})
         if verbose:
             print(
-                f"Download {result['down']:.1f} Mbps, upload {result['up']:.1f} Mbps, ping {result['ping']:.0f} ms ({result['server']})"
+                f"Download {result['down']:.1f} Mbps, upload {result['up']:.1f} Mbps, "
+                f"ping {result['ping']:.0f} ms ({result['server']})"
             )
         return 0
     _write({"state": "error", "error": " | ".join(errors), "finished": time.time()})

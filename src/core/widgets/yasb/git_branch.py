@@ -128,9 +128,10 @@ class GitBranchWidget(BaseWidget):
         folder = folder_from_title(fg.title)
         if not folder:
             return None
-        if time.monotonic() - self._index_at > INDEX_TTL or folder.lower() not in self._index:
-            if time.monotonic() - self._index_at > 10:
-                self._build_index()
+        stale = time.monotonic() - self._index_at
+        # reindexam cand lista a expirat sau cand folderul nu e in ea, dar nu mai des de 10 s
+        if (stale > INDEX_TTL or folder.lower() not in self._index) and stale > 10:
+            self._build_index()
         return self._index.get(folder.lower())
 
     # ------------------------------------------------------------------ actualizare

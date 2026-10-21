@@ -13,7 +13,10 @@ faulthandler.dump_traceback_later(12, exit=True)
 from PyQt6.QtCore import QCoreApplication, QObject, QThread, QTimer, qVersion  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
-print(f"Python {sys.version.split()[0]} | Qt {qVersion()} | fir Python: {threading.current_thread().name} (id {threading.get_ident()})")
+print(
+    f"Python {sys.version.split()[0]} | Qt {qVersion()} | "
+    f"fir Python: {threading.current_thread().name} (id {threading.get_ident()})"
+)
 app = QApplication(sys.argv)
 main_qt = app.thread()
 cur = QThread.currentThread()

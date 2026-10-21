@@ -21,7 +21,8 @@ from core.widgets.yasb.mint_common import fill_labels, foreground, toggle_alt
 
 RTSS_SIGNATURE = 0x52545353  # "RTSS"
 MAPPING_NAME = "RTSSSharedMemoryV2"
-HEADER = struct.Struct("<8I")  # signature, version, appEntrySize, appArrOffset, appArrSize, osdEntrySize, osdArrOffset, osdArrSize
+# signature, version, appEntrySize, appArrOffset, appArrSize, osdEntrySize, osdArrOffset, osdArrSize
+HEADER = struct.Struct("<8I")
 APP_PID = struct.Struct("<I")
 APP_NAME_LEN = 260
 APP_TAIL = struct.Struct("<5I")  # flags, time0, time1, frames, frameTime(us)

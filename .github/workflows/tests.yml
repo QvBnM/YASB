@@ -1,0 +1,27 @@
+name: teste
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Testele rulează pe module înlocuitoare de Qt (tests/stubs.py), deci nu au nevoie
+      # nici de Windows, nici de PyQt6 — doar de pydantic (schemele) și PyYAML (config.yaml).
+      - name: Instalează ce trebuie
+        run: python -m pip install --quiet pydantic PyYAML ruff
+
+      - name: Teste
+        run: python tests/run.py
+
+      - name: Lint
+        run: ruff check --line-length 130 src tools tests

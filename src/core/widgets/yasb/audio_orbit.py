@@ -97,9 +97,12 @@ class AudioOrbitWidget(BaseWidget):
             self._palette = {k: v for k, v in colors.items() if isinstance(v, str) and v.startswith("#")}
         except Exception:  # missing / partial / invalid file
             self._palette = {}
-        if self._palette_watcher is not None and os.path.isfile(self._palette_path):
-            if self._palette_path not in self._palette_watcher.files():
-                self._palette_watcher.addPath(self._palette_path)
+        if (
+            self._palette_watcher is not None
+            and os.path.isfile(self._palette_path)
+            and self._palette_path not in self._palette_watcher.files()
+        ):
+            self._palette_watcher.addPath(self._palette_path)
         if self._canvas_alive():
             self.canvas.set_colors(self._colors())
 

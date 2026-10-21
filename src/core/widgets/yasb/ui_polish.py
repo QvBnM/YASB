@@ -194,7 +194,8 @@ class UiPolishWidget(BaseWidget):
         upcoming = upcoming_holidays(cfg.country_code, today)
 
         if cfg.full_holiday_names and items:
-            for lb, (start, end, name) in zip(items, upcoming):
+            # randurile din popup si sarbatorile nu sunt mereu la fel de multe
+            for lb, (start, end, name) in zip(items, upcoming, strict=False):
                 lb.setWordWrap(True)
                 lb.setTextFormat(Qt.TextFormat.RichText)
                 QLabel.setText(lb, f"<span style='color:{self._danger}'>{format_range(start, end)}</span>&nbsp;&nbsp;{name}")

@@ -568,7 +568,7 @@ def _single_instance() -> bool:
     global _lock_handle
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        _lock_handle = open(CACHE_DIR / "watch.lock", "a+")
+        _lock_handle = open(CACHE_DIR / "watch.lock", "a+")  # noqa: SIM115 - ramane deschis cat ruleaza
         if os.name == "nt":
             import msvcrt
 

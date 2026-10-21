@@ -1,0 +1,20 @@
+# Regulile de lint ale proiectului, scrise aici ca să fie aceleași local și în CI.
+line-length = 130
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "B", "SIM", "RUF", "N"]
+ignore = [
+    "RUF001", # „caractere ambigue”: textele sunt în română, cu diacritice
+    "RUF002",
+    "RUF003",
+    "RUF012", # liste/dicturi ca valori implicite de clasă: așa se scriu schemele și configurările
+    "SIM105", # try/except/pass e mai clar decât contextlib.suppress în codul care atinge Windows
+    "E741",   # „l” ca nume: folosit pentru luminozitate în calculele de culoare
+    "N801",   # _MONITORINFO, _ADAPTER…: structurile ctypes poartă numele lor din Win32
+    "N806",   # HWND_TOPMOST, SWP_NOZORDER…: constantele Win32 rămân cu numele din documentație
+]
+
+[lint.per-file-ignores]
+# Stub-urile de test imită module Qt: atribute create din mers, clase goale.
+"tests/stubs.py" = ["B010", "SIM"]

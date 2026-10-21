@@ -383,7 +383,8 @@ def fill_labels(widget, values: dict) -> None:
     labels = widget._widgets_alt if show_alt else widget._widgets
     content = widget.config.label_alt if show_alt else widget.config.label
     parts = [p.strip() for p in _SPAN_SPLIT.split(content) if p and p.strip()]
-    for label, part in zip(labels, parts):
+    # eticheta poate avea mai putine span-uri decat valori: perechile in plus se ignora
+    for label, part in zip(labels, parts, strict=False):
         raw = re.sub(r"<span.*?>|</span>", "", part).strip() if "<span" in part else part
         try:
             text = raw.format(**values)
