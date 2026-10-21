@@ -40,7 +40,7 @@ TRANSCODED = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Th
 POLL_SECONDS = 2.0
 
 # Used when nothing can be extracted (and as the palette shipped with the theme)
-FALLBACK = {"bg": "#101716", "candidates": ["#7dd9c7", "#b9d4f0", "#e6b980"]}
+FALLBACK = {"bg": "#101716", "candidates": [(0.34, "#7dd9c7"), (0.33, "#b9d4f0"), (0.33, "#e6b980")]}
 
 log = logging.getLogger("yasb_palette")
 
@@ -108,7 +108,10 @@ def extract_with_pywal(image: Path) -> dict | None:
         try:
             result = pywal.colors.get(str(image), backend=backend, cache_dir=str(CACHE_DIR / "wal"))
             colors = result["colors"]
-            candidates = [colors[f"color{i}"] for i in (1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14)]
+            picked = [colors[f"color{i}"] for i in (1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14)]
+            # pywal nu spune cat loc ocupa fiecare: le dam tuturor aceeasi pondere, deci
+            # ordinea ramane data de cat de colorate sunt.
+            candidates = [(1.0 / len(picked), c) for c in picked]
             log.info("pywal backend %s", backend)
             return {"bg": result["special"]["background"], "candidates": candidates, "source": f"pywal/{backend}"}
         except Exception as e:  # backend missing or failed: try the next one
@@ -137,25 +140,60 @@ def extract_with_pillow(image: Path) -> dict | None:
         swatches.append((count, rgb_to_hex((r / 255, g / 255, b / 255))))
     if not swatches:
         return None
-    # background hue: the dominant color; accents: everything, ranked later by colorfulness
-    return {"bg": swatches[0][1], "candidates": [c for _, c in swatches], "source": "pillow"}
+    total = sum(count for count, _ in swatches) or 1
+    # fundalul = culoarea cu cel mai mult loc; accentul se alege mai incolo, din culoare si loc
+    return {
+        "bg": swatches[0][1],
+        "candidates": [(count / total, color) for count, color in swatches],
+        "source": "pillow",
+    }
 
 
 # --------------------------------------------------------------------------- palette
-def build_palette(bg: str, candidates: list[str]) -> dict[str, str]:
-    # accent = the most colorful candidate (not gray, not near-black, not near-white)
-    def score(c: str) -> float:
-        _h, light, s = hls(c)
-        if s < 0.16 or light < 0.15 or light > 0.9:
-            return -1
-        return s * (1 - abs(light - 0.58) * 1.4)
+MIN_SHARE = 0.004  # sub atat dintr-o imagine, o culoare e zgomot, nu o culoare a ei
 
-    ranked = sorted(set(candidates), key=score, reverse=True)
-    has_accent = bool(ranked) and score(ranked[0]) > 0
+
+def vividness(color: str) -> float:
+    """Cat de "colorata" e, fara sa conteze cat loc ocupa. 0 = gri, prea inchisa sau prea deschisa."""
+    _h, light, s = hls(color)
+    if s < 0.16 or light < 0.15 or light > 0.9:
+        return 0.0
+    return s * s * max(0.0, 1 - abs(light - 0.58) * 1.4)
+
+
+def rank_candidates(candidates: list[tuple[float, str]]) -> list[str]:
+    """
+    Culorile imaginii, de la cea mai potrivita ca accent la cea mai putin potrivita.
+
+    Doua lucruri contau si lipseau:
+
+    1. Cat loc ocupa culoarea. Pana acum nu conta deloc: castiga cel mai viu petic din
+       imagine, chiar daca erau zece pixeli dintr-un logo sau din zgomotul unui JPEG. De aici
+       accente care nu se regaseau nicaieri pe ecran. Acum numara si prezenta, dar cu radacina
+       patrata: un neon subtire si aprins bate tot o suprafata mare si stearsa, fara ca un
+       firicel de pixeli sa mai poata castiga.
+    2. Ordinea sa fie aceeasi de fiecare data. `sorted(set(...))` pleca de la o multime, a
+       carei ordine difera de la o pornire la alta: doua culori la egalitate isi schimbau
+       locul intre ele, deci aceeasi imagine putea da alt accent dupa o repornire.
+    """
+    best: dict[str, float] = {}
+    for share, color in candidates:
+        if share < MIN_SHARE:
+            continue
+        points = (share**0.5) * vividness(color)
+        if points > best.get(color, -1.0):
+            best[color] = points
+    ranked = [c for c, points in sorted(best.items(), key=lambda kv: (-kv[1], kv[0])) if points > 0]
+    return ranked
+
+
+def build_palette(bg: str, candidates: list[tuple[float, str]]) -> dict[str, str]:
+    ranked = rank_candidates(candidates)
+    has_accent = bool(ranked)
     acc = ranked[0] if has_accent else "#7dd9c7"
     ah, al, as_ = hls(acc)
     accent = from_hls(ah, min(max(al, 0.62), 0.78), min(max(as_, 0.45), 0.75))
-    second = next((c for c in ranked[1:] if score(c) > 0 and hue_distance(hls(c)[0], ah) >= 40), None)
+    second = next((c for c in ranked[1:] if hue_distance(hls(c)[0], ah) >= 40), None)
     sh, _sl, ss = hls(second) if second else ((ah + 0.12) % 1.0, 0, 0.5)
     accent2 = from_hls(sh, 0.80, min(max(ss, 0.35), 0.6))
 
