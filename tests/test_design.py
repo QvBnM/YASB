@@ -142,6 +142,20 @@ class TestFeedback(unittest.TestCase):
         self.assertIsNotNone(rule)
         self.assertIn("min-width", rule.group(1))
 
+    def test_an_icon_that_changes_with_its_value_has_a_fixed_box(self):
+        """
+        O iconiță care schimbă glifa (mut / mic / mediu / tare) schimbă și lățimea.
+
+        La volum se vedea limpede: iconița stă în capul barei, deci tot ce e la dreapta ei —
+        titlul ferestrei, ora, partea dreaptă — se muta cu câțiva pixeli la fiecare mișcare a
+        cursorului. Părea că „se mișcă bara cu totul". Cutia rezervată oprește asta din rădăcină.
+        """
+        for selector in (".audio-slider-widget .icon", ".status-group .widget .icon"):
+            widths = re.findall(re.escape(selector) + r"\s*\{(.*?)\}", BODY, re.S)
+            self.assertTrue(widths, f"lipsește regula pentru {selector}")
+            declared = " ".join(widths)
+            self.assertIn("min-width", declared, selector)
+
 
 class TestPopups(unittest.TestCase):
     """Popup-urile nu semănau între ele: patru lățimi, două mărimi de titlu, jumătate fără linie."""

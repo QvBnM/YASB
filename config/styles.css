@@ -185,12 +185,19 @@
 .audio-slider-widget .widget-container {
     padding: 0 10px 0 4px;
 }
+/* Cutia iconitei e rezervata, la fel ca la stari: glifele de volum (mut / mic / mediu / tare)
+   nu au aceeasi latime, iar iconita sta in capul barei. Fara latime fixa, tot ce e la dreapta
+   ei — titlul ferestrei, ora, partea dreapta — se muta cu cativa pixeli la fiecare miscare a
+   cursorului de volum. De aici impresia ca "se misca bara cu totul" cand dai volumul. */
 .audio-slider-widget .icon {
     background: transparent;
     border: none;
     color: var(--text);
     font-size: var(--ic);
     padding: 0 6px 0 0;
+    min-width: 22px;
+    max-width: 22px;
+    -qproperty-alignment: 'AlignCenter';
 }
 .audio-slider-widget .icon:hover {
     color: var(--accent);

@@ -16,7 +16,7 @@ stubs.install()
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
 from core.validation.widgets.yasb.bar_overflow import BarOverflowConfig, OverflowEntry  # noqa: E402
-from core.widgets.yasb.bar_overflow import rows_for, widget_text  # noqa: E402
+from core.widgets.yasb.bar_overflow import for_this_bar, rows_for, widget_text  # noqa: E402
 
 
 class FakeLabel:
@@ -47,8 +47,27 @@ class Dead(FakeWidget):
         pass
 
 
+class InBar:
+    """Un widget din bara asta, cu starea lui de pe ecran."""
+
+    def __init__(self, hidden: bool = True):
+        self._hidden = hidden
+
+    def isHidden(self) -> bool:  # noqa: N802 - nume Qt
+        return self._hidden
+
+
 class TestRows(unittest.TestCase):
-    KNOWN = {"gpu": object(), "ram": object(), "weather": object()}
+    KNOWN = {"gpu": InBar(), "ram": InBar(), "weather": InBar()}
+
+    def test_a_widget_that_is_on_screen_is_never_listed(self):
+        """
+        Exact ce s-a văzut pe PC: meniul scria „Trafic, Vremea, Wallpaper" deși toate trei
+        se vedeau în bară. Lista nu are voie să se ia după ce credem noi, ci după ecran.
+        """
+        known = {"gpu": InBar(hidden=False)}
+        self.assertEqual(rows_for(["gpu"], [OverflowEntry(widget="gpu")], known), [])
+        self.assertEqual(rows_for(["gpu"], [], known), [])
 
     def test_only_what_is_hidden_is_listed(self):
         entries = [OverflowEntry(widget="gpu", title="Placa video"), OverflowEntry(widget="ram", title="Memorie")]
@@ -84,6 +103,29 @@ class TestRows(unittest.TestCase):
         """Lista nu inventează rânduri: dacă bara n-a ascuns nimic, lista e goală."""
         entries = [OverflowEntry(widget=f"w{i}", title=f"W{i}") for i in range(10)]
         self.assertEqual(rows_for([], entries, {}), [])
+
+
+class TestWhoseBar(unittest.TestCase):
+    """
+    Cu două monitoare, vestea pleacă pe același canal pentru toate barele.
+
+    Fiecare bară o primea și pe a celeilalte, iar numele nu ajutau la nimic: același config
+    rulează pe ambele monitoare, deci widget-urile se cheamă la fel peste tot. De asta vestea
+    spune și de la care bară vine.
+    """
+
+    def test_my_own_bar(self):
+        self.assertEqual(for_this_bar("bar-0|gpu,ram", "bar-0"), ["gpu", "ram"])
+
+    def test_the_other_monitor_is_ignored(self):
+        self.assertIsNone(for_this_bar("bar-1|gpu,ram", "bar-0"))
+
+    def test_my_bar_with_nothing_hidden(self):
+        self.assertEqual(for_this_bar("bar-0|", "bar-0"), [])
+
+    def test_a_bar_without_an_id_only_hears_its_own(self):
+        self.assertEqual(for_this_bar("|gpu", ""), ["gpu"])
+        self.assertIsNone(for_this_bar("bar-0|gpu", ""))
 
 
 class TestWidgetText(unittest.TestCase):

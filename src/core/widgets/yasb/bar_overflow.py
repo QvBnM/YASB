@@ -52,16 +52,42 @@ def widget_text(widget) -> str:
     return " ".join(parts)
 
 
+def for_this_bar(payload: str, bar_id: str) -> list[str] | None:
+    """
+    Ce a ascuns *bara asta*. None inseamna "vestea e de la alta bara, nu ma priveste".
+
+    Vestea pleaca pe acelasi canal pentru toate barele. Cu doua monitoare, fiecare bara o
+    primea si pe a celeilalte: pe PC, meniul de la capat scria „Trafic, Vremea, Wallpaper"
+    desi toate trei se vedeau in bara — erau ascunse pe laptop. Numele nu ajutau la nimic:
+    acelasi config ruleaza pe ambele, deci widget-urile se cheama la fel peste tot.
+    """
+    sender, _, names = payload.partition("|")
+    if sender != bar_id:
+        return None
+    return [n for n in names.split(",") if n]
+
+
 def rows_for(hidden: list[str], entries: list, known: dict[str, object]) -> list[tuple[str, str, str]]:
     """
     (titlu, iconita, nume) pentru fiecare widget ascuns care merita aratat.
 
     Cu `entries` scrise in config pastram ordinea si numele lor, dar sarim peste ce nu e
     ascuns acum. Fara `entries`, aratam tot ce a ascuns bara.
+
+    Un widget trebuie sa fie si in bara asta, si chiar ascuns: altfel am scrie "pe dinafara"
+    despre ceva ce se vede.
     """
+    present = {name for name, w in known.items() if _hidden_now(w)}
     if entries:
-        return [(e.title or e.widget, e.icon, e.widget) for e in entries if e.widget in hidden]
-    return [(name, "", name) for name in hidden if name in known]
+        return [(e.title or e.widget, e.icon, e.widget) for e in entries if e.widget in hidden and e.widget in present]
+    return [(name, "", name) for name in hidden if name in present]
+
+
+def _hidden_now(widget) -> bool:
+    try:
+        return bool(widget.isHidden())
+    except (RuntimeError, AttributeError):
+        return False
 
 
 class _Row(QFrame):
@@ -119,8 +145,11 @@ class BarOverflowWidget(BaseWidget):
 
     # ------------------------------------------------------------------ ce s-a ascuns
 
-    def _on_hidden(self, names: str) -> None:
-        self._hidden = [n for n in names.split(",") if n]
+    def _on_hidden(self, payload: str) -> None:
+        mine = for_this_bar(payload, str(getattr(self, "bar_id", "")))
+        if mine is None:
+            return  # vestea e de la bara de pe celalalt monitor
+        self._hidden = mine
         visibility.request(self, visibility.SELF, bool(self._rows_now()))
         if self._menu is not None and is_valid_qobject(self._menu) and self._menu.isVisible():
             self._fill_menu()

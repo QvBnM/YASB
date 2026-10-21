@@ -444,7 +444,9 @@ class ResponsiveWidget(BaseWidget):
             for name, w in found.items()
             if not visibility.wants(w, visibility.SPACE) and _really_hidden(w)
         )
-        payload = ",".join(hidden)
+        # Vestea pleaca pe un canal comun tuturor barelor, deci spunem si cine o trimite:
+        # altfel bara de pe celalalt monitor crede ca e despre widget-urile ei.
+        payload = f"{getattr(self, 'bar_id', '')}|" + ",".join(hidden)
         if payload == self._announced:
             return
         self._announced = payload
