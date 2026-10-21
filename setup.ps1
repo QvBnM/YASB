@@ -2,7 +2,7 @@
 #  YASB Mint Bar - instalare completa pe un Windows proaspat
 #  Ruleaza din folderul yasb-setup:
 #     powershell -ExecutionPolicy Bypass -File .\setup.ps1
-#  Optional:  -YasbPath "D:\dev\yasb"   -NoAutostart   -NoHWiNFO
+#  Optional:  -YasbPath "D:\dev\yasb"   -NoAutostart   -NoHWiNFO   -ForceHWiNFO
 # ============================================================
 
 param(
@@ -12,7 +12,8 @@ param(
     # pe alta; daca verificarea trece, noua versiune devine cea fixata.
     [string]$YasbRef = "",
     [switch]$NoAutostart,
-    [switch]$NoHWiNFO
+    [switch]$NoHWiNFO,
+    [switch]$ForceHWiNFO
 )
 
 # Continue: git/winget write progress to stderr, which would abort PowerShell 5 on "Stop".
@@ -232,20 +233,32 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # ---------- 7c. HWiNFO64: temperatura CPU pentru bara ----------
+# Intai ne uitam, fara Administrator: daca HWiNFO e instalat, setat cum trebuie si pornit,
+# nu avem ce face si nu cerem acordul degeaba. Pana acum il opream, ii rescriam setarile si
+# il porneam din nou la fiecare instalare, chiar cand totul era deja bine.
 if (-not $NoHWiNFO) {
-    Step "Configurez HWiNFO64 (senzori, Shared Memory, pornire la logare)"
+    Step "Verific HWiNFO64 (temperatura CPU)"
     $hw = Join-Path $here "tools\hwinfo_setup.ps1"
     $me = "$env:USERDOMAIN\$env:USERNAME"
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if ($isAdmin) {
-        try { & $hw -ForUser $me } catch { Warn "HWiNFO: $($_.Exception.Message)" }
+    $extra = if ($ForceHWiNFO) { @("-Force") } else { @() }
+    & $hw -CheckOnly
+    $hwNeedsWork = ($LASTEXITCODE -ne 0) -or $ForceHWiNFO
+    if (-not $hwNeedsWork) {
+        Ok "HWiNFO e deja configurat; nu-l ating si nu cer Administrator"
     } else {
-        Warn "Windows iti cere acordul de Administrator (HWiNFO sta in Program Files)."
-        try {
-            $p = Start-Process powershell -Verb RunAs -Wait -PassThru -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$hw`" -ForUser `"$me`""
-            if ($p.ExitCode -eq 0) { Ok "HWiNFO configurat" } else { Warn "Configurarea HWiNFO a esuat (cod $($p.ExitCode))." }
-        } catch {
-            Warn "Ai refuzat acordul de Administrator: HWiNFO ramane cum era (temperatura CPU poate lipsi)."
+        Step "Configurez HWiNFO64 (senzori, Shared Memory, pornire la logare)"
+        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        if ($isAdmin) {
+            try { & $hw -ForUser $me @extra } catch { Warn "HWiNFO: $($_.Exception.Message)" }
+        } else {
+            Warn "Windows iti cere acordul de Administrator (HWiNFO sta in Program Files)."
+            try {
+                $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$hw`" -ForUser `"$me`" $($extra -join ' ')"
+                $p = Start-Process powershell -Verb RunAs -Wait -PassThru -ArgumentList $argList
+                if ($p.ExitCode -eq 0) { Ok "HWiNFO configurat" } else { Warn "Configurarea HWiNFO a esuat (cod $($p.ExitCode))." }
+            } catch {
+                Warn "Ai refuzat acordul de Administrator: HWiNFO ramane cum era (temperatura CPU poate lipsi)."
+            }
         }
     }
 }

@@ -81,3 +81,49 @@ class TestInstaller(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHWiNFOIsLeftAlone(unittest.TestCase):
+    """
+    Dacă HWiNFO e deja instalat, setat și pornit, instalarea nu-l mai atinge.
+
+    Până acum, la fiecare rulare: cerea Administrator, oprea HWiNFO, îi rescria fișierul de
+    setări, refăcea sarcina programată și îl pornea din nou — chiar când totul era deja bine.
+    """
+
+    HW = REPO / "tools" / "hwinfo_setup.ps1"
+
+    def setUp(self):
+        self.hw = self.HW.read_text(encoding="utf-8")
+        self.setup = SETUP.read_text(encoding="utf-8")
+
+    def test_it_can_just_look(self):
+        self.assertIn("[switch]$CheckOnly", self.hw)
+
+    def test_looking_does_not_need_administrator(self):
+        """Altfel verificarea ar cere chiar acordul pe care vrem să-l evităm."""
+        self.assertIn("if (-not $CheckOnly -and -not $admin)", self.hw)
+
+    def test_the_installer_looks_before_it_asks(self):
+        check = self.setup.index("-CheckOnly")
+        elevate = self.setup.index("Start-Process powershell -Verb RunAs")
+        self.assertLess(check, elevate, "cere Administrator înainte să se uite dacă e cazul")
+
+    def test_nothing_is_touched_when_all_is_well(self):
+        self.assertIn("nu ating nimic", self.hw)
+        self.assertIn("nu-l ating si nu cer Administrator", self.setup)
+
+    def test_hwinfo_is_only_stopped_when_settings_must_change(self):
+        """Oprirea programului e scumpă: se face doar dacă chiar avem ce scrie în fișier."""
+        guard = self.hw.index("if ($needIni) {")
+        stop = self.hw.index("Stop-Process -Force -ErrorAction SilentlyContinue")
+        self.assertLess(guard, stop, "oprește HWiNFO înainte să știe dacă e nevoie")
+
+    def test_you_can_still_force_it(self):
+        self.assertIn("[switch]$Force", self.hw)
+        self.assertIn("ForceHWiNFO", self.setup)
+
+    def test_the_wanted_settings_are_written_down_once(self):
+        """Verificarea și repararea trebuie să se uite la aceeași listă, nu la două copii."""
+        both = self.hw + self.setup
+        self.assertEqual(both.count('"SensorsSM"'), 1)
