@@ -77,6 +77,26 @@ def plan_bar(budget: int, fixed: int, sides: dict[str, tuple[int, list[Entry]]],
     return [], []
 
 
+def learned_width(hint: int, delta: int) -> int:
+    """
+    Cat ocupa de fapt un widget: cat s-a schimbat nevoia coloanei cand l-am ascuns.
+
+    sizeHint-ul unui widget nu cuprinde si spatiile din jurul lui — marginile containerului,
+    distanta dintre vecini. Deci cand il ascunzi se elibereaza mai mult decat spune el. In
+    jurnal: memoria ocupa 112 px, dar se socotea cu ~76, asa ca era adusa inapoi intr-un loc
+    de 100 px in care nu incapea, si tot asa.
+
+    Prima masuratoare dupa ascundere ne spune cifra adevarata. O luam doar daca e de ordinul
+    de marime asteptat: intre timp se mai schimba si titlul ferestrei sau traficul, iar din
+    asta ar iesi cifre fanteziste.
+    """
+    if hint <= 0:
+        return max(delta, 1)
+    if round(0.8 * hint) <= delta <= round(2.5 * hint):
+        return delta
+    return hint
+
+
 def settled(elapsed_ms: float, settle_ms: int) -> bool:
     """
     A trecut destul de la pornire cat sa merite sa ascundem ceva?
@@ -187,6 +207,7 @@ class ResponsiveWidget(BaseWidget):
         make_invisible(self)
         self._tier: str | None = None
         self._started = time.monotonic()
+        self._learn: tuple[str, str, int] | None = None  # (latura, widget, cat cerea inainte)
         self._need_at: dict[str, int] = {}  # cat cerea bara ultima data la fiecare nivel
         self._watched: QWidget | None = None
         self._clock_column: QWidget | None = None
@@ -397,6 +418,8 @@ class ResponsiveWidget(BaseWidget):
             self._announce(found)
             return  # masuram, dar lasam bara sa se aseze inainte sa ascundem ceva
 
+        self._learn_width(sides, found)
+
         to_hide, to_show = plan_bar(budget, fixed, sides, self.config.hysteresis)
         if reserve and still_hidden(sides, to_hide, to_show):
             # ramane ceva ascuns, deci sageata se vede: abia acum ii tinem locul
@@ -415,7 +438,33 @@ class ResponsiveWidget(BaseWidget):
                 to_hide,
                 to_show,
             )
+        # o singura schimbare pe masuratoare: abia atunci diferenta de la tick-ul urmator
+        # spune curat cat ocupa widget-ul (vezi learned_width)
+        changed = to_hide + to_show
+        self._learn = None
+        if len(changed) == 1:
+            name = changed[0]
+            for key, (need, order) in sides.items():
+                if any(entry[0] == name for entry in order):
+                    self._learn = (key, name, need)
+                    break
         self._announce(found)
+
+    def _learn_width(self, sides: dict[str, tuple[int, list[Entry]]], found: dict[str, QWidget]) -> None:
+        """Dupa ce am ascuns ceva, prima masuratoare noua ne spune cat ocupa de fapt."""
+        if self._learn is None:
+            return
+        key, name, before = self._learn
+        self._learn = None
+        side = sides.get(key)
+        widget = found.get(name)
+        if side is None or widget is None:
+            return
+        delta = abs(before - side[0])
+        if delta <= 0:
+            return
+        hint = self._hint(widget)
+        setattr(widget, LAST_WIDTH, learned_width(hint, delta))
 
     def _columns(self, frame: QWidget) -> list[QWidget]:
         """Cele trei coloane ale barei (stanga / mijloc / dreapta), copii direcți ai cadrului."""

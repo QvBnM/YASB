@@ -9,6 +9,7 @@ stubs.install()
 from core.validation.widgets.yasb.responsive import ResponsiveConfig  # noqa: E402
 from core.widgets.yasb.responsive import (  # noqa: E402
     LAST_WIDTH,
+    learned_width,
     ResponsiveWidget,
     plan_bar,
     settled,
@@ -421,3 +422,37 @@ class TestSettlingDown(unittest.TestCase):
 
     def test_it_can_be_turned_off(self):
         self.assertTrue(settled(0, 0))
+
+
+class TestLearningTheRealWidth(unittest.TestCase):
+    """
+    Cât ocupă de fapt un widget: cât s-a schimbat nevoia coloanei când l-am ascuns.
+
+    sizeHint-ul lui nu cuprinde și spațiile din jur — marginile containerului, distanța dintre
+    vecini. Deci când îl ascunzi se eliberează mai mult decât spune el. Din jurnal: memoria
+    ocupa 112 px, dar se socotea cu ~76, așa că era adusă înapoi într-un loc de 100 px în care
+    nu încăpea — ascunsă, arătată, la o secundă.
+    """
+
+    def test_the_measured_difference_wins(self):
+        self.assertEqual(learned_width(76, 112), 112)
+
+    def test_a_nonsense_jump_is_ignored(self):
+        """Între timp se mai schimbă titlul ferestrei sau traficul: nu luăm orice cifră."""
+        self.assertEqual(learned_width(76, 900), 76)
+        self.assertEqual(learned_width(76, 4), 76)
+
+    def test_a_widget_without_a_hint_takes_what_it_measured(self):
+        self.assertEqual(learned_width(0, 112), 112)
+
+    def test_once_learned_it_is_not_brought_back_into_too_little_room(self):
+        """Exact cazul din jurnal: 100 px liberi, memoria cere 112 — rămâne ascunsă."""
+        hidden_ram = [("ram", learned_width(76, 112), True)]
+        _, to_show = plan_bar(1241, 0, {"right": (1141, hidden_ram)}, 24)
+        self.assertEqual(to_show, [])
+
+    def test_with_the_old_number_it_would_flap(self):
+        """Dovada că cifra conta: cu sizeHint-ul, o aducea înapoi și o ascundea la loc."""
+        hidden_ram = [("ram", 76, True)]
+        _, to_show = plan_bar(1241, 0, {"right": (1141, hidden_ram)}, 24)
+        self.assertEqual(to_show, ["ram"])
