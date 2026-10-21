@@ -34,6 +34,7 @@ from core.utils.tooltip import set_tooltip
 from core.utils.utilities import PopupWidget
 from core.validation.widgets.yasb.net_status import NetStatusConfig, SpeedtestConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.bluetooth import BluetoothWidget
 
 # ============================================================================ probes
@@ -815,19 +816,13 @@ class BluetoothAutoWidget(BluetoothWidget):
     """YASB's Bluetooth widget, but invisible when the PC has no Bluetooth module."""
 
     def __init__(self, config):
-        self._has_radio = bluetooth_present() if os.name == "nt" else True
         super().__init__(config)
-        self.setVisible(True)
+        self._check_radio()
         self._radio_timer = QTimer(self)
         self._radio_timer.setInterval(30_000)
         self._radio_timer.timeout.connect(self._check_radio)
         self._radio_timer.start()
 
     def _check_radio(self) -> None:
-        has = bluetooth_present()
-        if has != self._has_radio:
-            self._has_radio = has
-            self.setVisible(True)
-
-    def setVisible(self, visible: bool) -> None:  # noqa: N802 (Qt API)
-        super().setVisible(visible and getattr(self, "_has_radio", True))
+        has_radio = bluetooth_present() if os.name == "nt" else True
+        visibility.request(self, visibility.SELF, has_radio)

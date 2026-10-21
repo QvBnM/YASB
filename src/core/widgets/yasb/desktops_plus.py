@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import QApplication, QFileIconProvider, QFrame, QHBoxLayout
 from core.utils.utilities import refresh_widget_style
 from core.validation.widgets.yasb.desktops_plus import DesktopsPlusConfig
 from core.widgets.services.windows_desktops.service import WindowsDesktopService
+from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.windows_desktops import WorkspaceButton, WorkspaceWidget
 
 
@@ -134,7 +135,10 @@ class DesktopsPlusWidget(WorkspaceWidget):
         try:
             from core.widgets.services.taskbar.application_window import ApplicationWindow
 
-            by_guid = {d.guid.lower(): d.number for d in self._svc.get_desktops()}
+            desktops = self._svc.get_desktops()
+            if self.config.hide_when_single:
+                visibility.request(self, visibility.SELF, len(desktops) > 1)
+            by_guid = {d.guid.lower(): d.number for d in desktops}
             apps: dict[int, list[DesktopApp]] = {n: [] for n in by_guid.values()}
             alive: set[int] = set()
             own_pid = __import__("os").getpid()

@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import QWidget
 from core.events.service import EventService
 from core.validation.widgets.yasb.context_mode import ContextModeConfig, ModeRule
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.mint_common import (
     Foreground,
     all_bar_widgets,
@@ -49,7 +50,6 @@ class ContextModeWidget(BaseWidget):
 
         self._mode: str | None = "<start>"
         self._last_true: dict[str, float] = {}
-        self._hidden_by_us: set[QWidget] = set()
         self._last_fg = Foreground()
         self._running: set[str] = set()
         self._running_at = 0.0
@@ -134,23 +134,13 @@ class ContextModeWidget(BaseWidget):
             hidden |= set(rule.hide)
             hidden -= set(rule.show)
 
+        # Nu chemam setVisible: spunem doar parerea noastra. Daca widget-ul n-are ce arata,
+        # sau daca nu mai incape pe bara, hotararea lor ramane in picioare (vezi mint_visibility).
         for w in all_bar_widgets(root):
             wname = getattr(w, "widget_name", None)
             if not wname or w is self:
                 continue
-            try:
-                if wname in hidden:
-                    if not w.isHidden():
-                        self._hidden_by_us.add(w)
-                        w.setVisible(False)
-                    elif wname in self.config.hidden_by_default:
-                        # pornit deja ascuns: il tinem minte ca sa-l putem arata in mod
-                        self._hidden_by_us.add(w)
-                elif w in self._hidden_by_us:
-                    self._hidden_by_us.discard(w)
-                    w.setVisible(True)
-            except RuntimeError:
-                self._hidden_by_us.discard(w)
+            visibility.request(w, visibility.MODE, wname not in hidden)
 
         if name != self._mode:
             self._mode = name

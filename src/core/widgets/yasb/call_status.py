@@ -13,6 +13,7 @@ from PyQt6.QtCore import QTimer
 
 from core.validation.widgets.yasb.call_status import CallStatusConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.mint_common import fill_labels, mic_users, toggle_alt
 
 
@@ -33,14 +34,13 @@ class CallStatusWidget(BaseWidget):
         self._started: float | None = None
         self._last_seen = 0.0
         self._app = ""
-        self._self_hidden = True
         self._init_container()
         self.build_widget_label(config.label, config.label_alt)
         self.register_callback("toggle_label", self._toggle)
         self.callback_left = config.callbacks.on_left
         self.callback_right = config.callbacks.on_right
         self.callback_middle = config.callbacks.on_middle
-        self.setVisible(False)
+        visibility.request(self, visibility.SELF, False)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._update)
         self._timer.start(config.update_interval)
@@ -61,11 +61,7 @@ class CallStatusWidget(BaseWidget):
             self._started = None
 
         if self._started is None:
-            if not self.isHidden():
-                self._self_hidden = True
-                self.setVisible(False)
+            visibility.request(self, visibility.SELF, False)
             return
-        if self._self_hidden:
-            self._self_hidden = False
-            self.setVisible(True)
+        visibility.request(self, visibility.SELF, True)
         fill_labels(self, {"elapsed": format_elapsed(now - self._started), "app": self._app})

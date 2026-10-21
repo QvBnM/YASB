@@ -20,6 +20,7 @@ from PyQt6.QtCore import QTimer, pyqtSignal
 
 from core.validation.widgets.yasb.git_branch import GitBranchConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.mint_common import fill_labels, foreground, toggle_alt
 
 EDITOR_TITLES = ("Visual Studio Code", "Cursor", "VSCodium")
@@ -79,7 +80,6 @@ class GitBranchWidget(BaseWidget):
         self._index_at = 0.0
         self._repo_path: str | None = None
         self._busy = False
-        self._self_hidden = False
         self._state: GitState | None = None
         self._editors = {e.lower() for e in config.editors}
         self._init_container()
@@ -93,8 +93,7 @@ class GitBranchWidget(BaseWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._update)
         self._timer.start(config.update_interval)
-        self._self_hidden = True
-        self.setVisible(False)
+        visibility.request(self, visibility.SELF, False)
         QTimer.singleShot(400, self._update)
 
     # ------------------------------------------------------------------ repo-uri
@@ -200,12 +199,7 @@ class GitBranchWidget(BaseWidget):
         )
 
     def _set_hidden(self, hidden: bool) -> None:
-        if hidden and not self.isHidden():
-            self._self_hidden = True
-            self.setVisible(False)
-        elif not hidden and self._self_hidden:
-            self._self_hidden = False
-            self.setVisible(True)
+        visibility.request(self, visibility.SELF, not hidden)
 
     def _toggle(self) -> None:
         toggle_alt(self)

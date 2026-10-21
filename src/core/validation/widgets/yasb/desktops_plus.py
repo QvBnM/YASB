@@ -13,6 +13,9 @@ class DesktopsHoverConfig(CustomBaseModel):
 
 
 class DesktopsPlusConfig(WindowsDesktopsConfig):
+    # Cu un singur desktop virtual bulina nu spune nimic si ocupa loc degeaba: o ascundem.
+    # Reapare singura in clipa in care adaugi al doilea (Win + Ctrl + D).
+    hide_when_single: bool = True
     scan_interval: int = Field(default=1500, ge=500)  # ms intre verificarile ferestrelor
     ignore_processes: list[str] = ["TextInputHost.exe", "ShellExperienceHost.exe", "SearchHost.exe"]
     hover: DesktopsHoverConfig = DesktopsHoverConfig()

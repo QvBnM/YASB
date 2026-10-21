@@ -20,6 +20,7 @@ from PyQt6.QtCore import QTimer
 from core.utils.tooltip import set_tooltip
 from core.validation.widgets.yasb.hwinfo_sensor import HwinfoSensorConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_visibility as visibility
 
 SHARED_MEMORY_NAME = "Global\\HWiNFO_SENS_SM2"
 SIGNATURE = 0x53695748  # "HWiS"
@@ -238,14 +239,16 @@ class HwinfoSensorWidget(BaseWidget):
         self._watch_hwinfo(r is not None)
         if r is None:
             if self.config.hide_if_unavailable:
-                self.hide()
+                # nu chemam hide(): spunem doar ca n-avem ce arata, iar arbitrul hotaraste.
+                # Asa nu mai reaparem peste un mod care tocmai ne-a ascuns.
+                visibility.request(self, visibility.SELF, False)
             else:
                 for w in widgets:
                     w.setText(self.config.unavailable_label)
             if self.config.tooltip:
                 set_tooltip(self, "HWiNFO: pornește Sensors cu Shared Memory Support activat")
             return
-        self.show()
+        visibility.request(self, visibility.SELF, True)
         fmt = f"{{:>{self.config.value_width}.{self.config.precision}f}}"
         values = {
             "{value}": fmt.format(r.value),

@@ -17,6 +17,7 @@ from PyQt6.QtCore import QTimer
 
 from core.validation.widgets.yasb.rtss_fps import RtssFpsConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.mint_common import fill_labels, foreground, toggle_alt
 
 RTSS_SIGNATURE = 0x52545353  # "RTSS"
@@ -120,7 +121,6 @@ class RtssFpsWidget(BaseWidget):
         self.config = config
         self._show_alt_label = False
         self._reader = _RtssReader()
-        self._self_hidden = False  # ne aratam singuri doar daca ne-am ascuns singuri (vezi context_mode)
         self._init_container()
         self.build_widget_label(config.label, config.label_alt)
         self.register_callback("toggle_label", self._toggle)
@@ -150,12 +150,9 @@ class RtssFpsWidget(BaseWidget):
     def _update(self) -> None:
         app = self._pick(self._reader.read())
         if app is None:
-            if self.config.hide_if_unavailable and not self.isHidden():
-                self._self_hidden = True
-                self.setVisible(False)
+            if self.config.hide_if_unavailable:
+                visibility.request(self, visibility.SELF, False)
             fill_labels(self, {"fps": "--", "frametime": 0.0, "app": ""})
             return
-        if self._self_hidden:
-            self._self_hidden = False
-            self.setVisible(True)
+        visibility.request(self, visibility.SELF, True)
         fill_labels(self, {"fps": round(app.fps), "frametime": app.frametime_ms, "app": app.name})

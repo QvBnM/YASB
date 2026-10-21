@@ -21,7 +21,17 @@ from core.validation.widgets.yasb.progress_line import ProgressLineConfig
 from core.widgets.base import BaseWidget
 from core.widgets.yasb.mint_common import PaletteWatcher, make_invisible
 
-TICK_MS = 250
+# Cat de des ne uitam daca e ceva de aratat. In repaus (fara melodie, fara focus, fara
+# descarcari) linia nu exista, deci nu are rost sa ne trezim des: 2 secunde ajung, iar media
+# ne anunta oricum pe loc prin semnalele ei. Cand chiar desenam, o jumatate de secunda e
+# suficient de fin — intr-o melodie de trei minute linia inainteaza sub un pixel pe tick.
+IDLE_MS = 2000
+ACTIVE_MS = 500
+
+
+def tick_interval(drawing: bool) -> int:
+    """Cat de des ne trezim: des doar cat chiar desenam linia."""
+    return ACTIVE_MS if drawing else IDLE_MS
 
 
 def torrents_progress(torrents: list[dict]) -> float | None:
@@ -58,12 +68,18 @@ class ProgressLineWidget(BaseWidget):
                 from core.widgets.services.media.media import WindowsMedia
 
                 self._media = WindowsMedia()
+                # pornim linia in clipa in care incepe melodia, nu la urmatorul tick
+                for signal in (
+                    self._media.playback_info_changed,
+                    self._media.current_session_changed,
+                ):
+                    signal.connect(self._tick)
             except Exception:
                 logging.warning("progress_line: serviciul media nu e disponibil")
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
-        self._timer.start(TICK_MS)
+        self._timer.start(IDLE_MS)
 
     # ------------------------------------------------------------------ surse
 
@@ -173,6 +189,10 @@ class ProgressLineWidget(BaseWidget):
             else:
                 self._started.setdefault(src, time.monotonic())
                 values[src] = v
+
+        wanted = tick_interval(bool(values))
+        if self._timer.interval() != wanted:
+            self._timer.setInterval(wanted)
 
         line, host = self._line, self._host
         assert line is not None and host is not None

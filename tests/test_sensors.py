@@ -11,7 +11,7 @@ from core.widgets.yasb.bar_notifications import shorten  # noqa: E402
 from core.widgets.yasb.git_branch import folder_from_title, parse_status  # noqa: E402
 from core.widgets.yasb.hwinfo_sensor import parse_shared_memory, pick_reading  # noqa: E402
 from core.widgets.yasb.net_status import Adapter, format_speed, pick_connection  # noqa: E402
-from core.widgets.yasb.progress_line import torrents_progress  # noqa: E402
+from core.widgets.yasb.progress_line import IDLE_MS, torrents_progress, tick_interval  # noqa: E402
 from core.widgets.yasb.rtss_fps import parse_rtss  # noqa: E402
 
 # ----------------------------------------------------------------- RivaTuner
@@ -225,6 +225,17 @@ class TestTorrents(unittest.TestCase):
     def test_result_stays_between_zero_and_one(self):
         value = torrents_progress([{"size": 10, "progress": 5.0}])
         self.assertEqual(value, 1.0)
+
+    def test_the_line_does_not_keep_the_bar_awake(self):
+        """
+        Bugetul din plan: în repaus, niciun cronometru sub o secundă.
+
+        Linia de progres bătea de patru ori pe secundă non-stop, și când nu era muzică, și când
+        nu era focus, și când nu descărcai nimic. Pe laptop asta se vedea în baterie.
+        """
+        self.assertGreaterEqual(tick_interval(drawing=False), 1000)
+        self.assertEqual(tick_interval(drawing=False), IDLE_MS)
+        self.assertLess(tick_interval(drawing=True), tick_interval(drawing=False))
 
 
 # ----------------------------------------------------------------- notificări

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import colorsys
 import logging
+import time
 
 from PyQt6.QtCore import QTimer, QVariantAnimation
 from PyQt6.QtGui import QColor
@@ -17,6 +18,11 @@ from PyQt6.QtGui import QColor
 from core.validation.widgets.yasb.cover_accent import CoverAccentConfig
 from core.widgets.base import BaseWidget
 from core.widgets.yasb.mint_common import PaletteWatcher, ensure_contrast, find_named, make_invisible, rgb_to_hex
+
+# Qt reciteste foaia de stil la fiecare setStyleSheet, iar animatia da ~60 de cadre pe
+# jumatate de secunda. Ochiul nu vede diferenta intre 60 de pasi si unul la fiecare 80 ms,
+# dar bara vede: de aceea aplicam rar si, obligatoriu, ultimul cadru.
+MIN_STEP_MS = 80
 
 ACCENT_QSS = """
 .audio-slider-widget .volume-slider::sub-page {{ background: {c}; border-radius: 2px; }}
@@ -55,6 +61,7 @@ class CoverAccentWidget(BaseWidget):
         make_invisible(self)
         self._palette = PaletteWatcher(self, self._on_palette)
         self._shown = ""  # culoarea aplicata acum ("" = paleta)
+        self._applied_at = 0.0
         self._target = ""
         self._last_key = None
         self._last_color: str | None = None
@@ -135,11 +142,19 @@ class CoverAccentWidget(BaseWidget):
                 pass
 
     def _on_frame(self, value) -> None:
-        if isinstance(value, QColor):
-            self._shown = value.name()
-            self._apply(self._shown)
+        if not isinstance(value, QColor):
+            return
+        self._shown = value.name()
+        now = time.monotonic() * 1000
+        if now - self._applied_at < MIN_STEP_MS:
+            return  # cadrul final vine oricum prin _on_finished
+        self._applied_at = now
+        self._apply(self._shown)
 
     def _on_finished(self) -> None:
+        self._applied_at = 0.0
+        if self._target:
+            self._apply(self._shown)  # cadrul final se aplica mereu, oricat de aproape ar fi de precedentul
         if not self._target:
             # inapoi la paleta: scoatem stilul local, ca sa se aplice din nou styles.css
             self._shown = ""

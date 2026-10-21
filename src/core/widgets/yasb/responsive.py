@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import QWidget
 
 from core.validation.widgets.yasb.responsive import ResponsiveConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.mint_common import find_named, make_invisible, refresh_tree, set_class_token
 
 
@@ -58,7 +59,6 @@ class ResponsiveWidget(BaseWidget):
         super().__init__(class_name="responsive")
         self.config = config
         make_invisible(self)
-        self._hidden: dict[str, QWidget] = {}
         self._compact: bool | None = None
         self._watched: QWidget | None = None
         self._timer = QTimer(self)
@@ -100,7 +100,7 @@ class ResponsiveWidget(BaseWidget):
         try:
             self._apply()
         except RuntimeError:
-            self._hidden = {k: v for k, v in self._hidden.items() if _alive(v)}
+            pass  # a widget was destroyed mid-measure: the next tick sees the new bar
         except Exception:
             logging.exception("responsive: evaluation failed")
 
@@ -148,29 +148,22 @@ class ResponsiveWidget(BaseWidget):
                     need += minimum - self._hint(fw)
             order = []
             for name, w in widgets:
-                hidden_by_us = name in self._hidden
+                # a widget a mode hid, or that hid itself for want of data, is not ours to manage:
+                # we only ever decide about room (see mint_visibility)
+                if not (visibility.wants(w, visibility.MODE) and visibility.wants(w, visibility.SELF)):
+                    continue
+                hidden_by_us = not visibility.wants(w, visibility.SPACE)
                 if w.isHidden() and not hidden_by_us:
-                    continue  # hidden by itself or by a mode: not ours to manage
+                    continue  # hidden by YASB itself (media with hide_empty): not ours either
                 order.append(
                     (name, self._hint(w) if hidden_by_us else max(1, w.width() or self._hint(w)), hidden_by_us)
                 )
             to_hide, to_show = plan(need, avail, order, self.config.hysteresis)
             for name in to_hide:
-                w = found[name]
-                self._hidden[name] = w
-                w.setVisible(False)
+                visibility.request(found[name], visibility.SPACE, False)
             for name in to_show:
-                w = self._hidden.pop(name)
-                w.setVisible(True)
+                visibility.request(found[name], visibility.SPACE, True)
             if to_hide or to_show:
                 logging.info(
                     "responsive: bar %dpx, side room %dpx -> hidden %s, shown %s", width, avail, to_hide, to_show
                 )
-
-
-def _alive(w: QWidget) -> bool:
-    try:
-        w.isHidden()
-        return True
-    except RuntimeError:
-        return False
