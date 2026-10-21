@@ -177,6 +177,51 @@ class TestPopups(unittest.TestCase):
         self.assertIn("border: 1px solid var(--line)", block.group(1))
         self.assertIn("border-radius: var(--r-popup)", block.group(1))
 
+    @staticmethod
+    def _paints_itself(name: str) -> bool:
+        for selectors, rule in re.findall(r"([^{}]+)\{([^{}]*)\}", BODY):
+            parts = [s.strip() for s in selectors.split(",") if s.strip()]
+            if name not in parts:
+                continue  # regula e pentru altceva, sau pentru un descendent
+            for value in re.findall(r"background(?:-color)?\s*:\s*([^;]+)", rule):
+                if "transparent" not in value and "none" not in value.lower():
+                    return True
+        return False
+
+    def test_every_popup_actually_has_a_background(self):
+        """
+        Testul de deasupra verifica doar ca regula comuna exista — nu si ca fiecare popup e
+        trecut in ea. Asa au ajuns doua popup-uri noi fara niciun fundal: se vedea fereastra
+        de dedesubt prin ele. Aici le numaram pe toate, una cate una.
+        """
+        shared = re.search(
+            r"((?:\.[\w.-]+,\s*\n?)+\.[\w.-]+)\s*\{[^}]*background-color: rgba\(var\(--panel-rgb\)",
+            BODY,
+        )
+        self.assertIsNotNone(shared, "nu mai gasesc regula comuna de fundal")
+        listed = {c.strip() for c in shared.group(1).replace("\n", "").split(",")}
+
+        # Panoul de sunet e transparent anume: panza lui isi deseneaza singura fundalul rotunjit
+        # (audio_orbit_canvas.py). Orice alt popup transparent e o scapare.
+        paints_its_own = {".audio-orbit-menu"}
+
+        see_through = []
+        for selectors, _rule in re.findall(r"([^{}]+)\{([^{}]*)\}", BODY):
+            for part in (s.strip() for s in selectors.split(",")):
+                match = re.fullmatch(r"\.([\w-]*(?:popup|menu|panel)[\w-]*)", part)
+                if not match:
+                    continue
+                name = "." + match.group(1)
+                if name in listed:
+                    continue
+                # Fundalul trebuie sa fie pe popup-ul insusi, nu pe ceva dinauntru, si sa fie
+                # un fundal adevarat: „transparent” pe cutia interioara nu acopera nimic.
+                if name not in paints_its_own and not self._paints_itself(name):
+                    see_through.append(name)
+        self.assertEqual(
+            sorted(set(see_through)), [], f"popup-uri fara fundal (se vede prin ele): {sorted(set(see_through))}"
+        )
+
     def test_titles_are_declared_once(self):
         titles = re.findall(r"font-size: var\(--fs-lead\);\n    font-weight: 700;", BODY)
         self.assertGreaterEqual(len(titles), 1)

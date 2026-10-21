@@ -54,6 +54,7 @@ class Status:
 
 
 _STATUS: dict[str, Status] = {}
+_PANEL = None  # panoul deschis acum, ca sa nu se adune cate unul la fiecare deschidere
 
 
 def should_stop(recent: list[float], now: float, limit: int = ERROR_LIMIT, window: float = ERROR_WINDOW) -> bool:
@@ -147,6 +148,13 @@ def show_panel(bar_frame, blur: bool = False) -> object | None:
 
     if bar_frame is None:
         return None
+    global _PANEL
+    if _PANEL is not None:
+        try:
+            _PANEL.deleteLater()  # o singura fereastra, nu una la fiecare deschidere
+        except RuntimeError:
+            pass
+        _PANEL = None
     popup = PopupWidget(bar_frame, blur, True, "normal", "None")
     popup.setProperty("class", "mint-health-panel")
     outer = QVBoxLayout(popup)
@@ -186,6 +194,7 @@ def show_panel(bar_frame, blur: bool = False) -> object | None:
     popup.adjustSize()
     popup.setPosition(alignment="center", direction="down", offset_top=6)
     popup.show()
+    _PANEL = popup
     return popup
 
 

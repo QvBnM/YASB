@@ -143,6 +143,8 @@ class BarOverflowWidget(BaseWidget):
 
     def _show_menu(self) -> None:
         m = self.config.menu
+        if self._menu is not None and is_valid_qobject(self._menu):
+            self._menu.deleteLater()  # altfel fiecare deschidere lasa in urma fereastra dinainte
         self._menu = PopupWidget(self, m.blur, m.round_corners, m.round_corners_type, m.border_color)
         self._menu.setProperty("class", "bar-overflow-menu")
         layout = QVBoxLayout(self._menu)

@@ -18,6 +18,7 @@ from PyQt6.QtCore import QEvent, QObject, QTimer
 from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 
 from core.events.service import EventService
+from core.utils.qobject import is_valid_qobject
 from core.validation.widgets.yasb.responsive import TIERS, ResponsiveConfig, TierThresholds
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
@@ -76,6 +77,13 @@ def tier_for(room: int, thresholds: TierThresholds, portrait: bool = False, port
     if portrait and TIERS.index(tier) > TIERS.index(portrait_max):
         tier = portrait_max
     return tier
+
+
+def _really_hidden(widget) -> bool:
+    try:
+        return widget.isHidden()
+    except RuntimeError:
+        return False
 
 
 def at_or_below(tier: str, limit: str) -> bool:
@@ -194,7 +202,7 @@ class ResponsiveWidget(BaseWidget):
 
     def _overflow(self, root: QWidget):
         """Sageata de la capatul barei, daca exista in bara asta."""
-        if self._overflow_widget is not None and self._overflow_widget.parent() is not None:
+        if self._overflow_widget is not None and is_valid_qobject(self._overflow_widget):
             return self._overflow_widget
         from core.widgets.yasb.bar_overflow import BarOverflowWidget
 
@@ -316,8 +324,13 @@ class ResponsiveWidget(BaseWidget):
         Numai ce am ascuns noi din lipsa de loc: ce ascunde un mod, sau widget-ul insusi fiindca
         n-are ce arata, nu e "pe dinafara" — e ascuns cu rost.
         """
+        # „ascuns de noi” nu e totuna cu „ascuns pe ecran”: unele widget-uri YASB se arata
+        # singure dupa ce le-am ascuns, iar atunci lista de la capatul barei ar fi spus
+        # „pe dinafara” despre ceva ce se vede. Cerem amandoua conditiile.
         hidden = sorted(
-            name for name, w in found.items() if not visibility.wants(w, visibility.SPACE)
+            name
+            for name, w in found.items()
+            if not visibility.wants(w, visibility.SPACE) and _really_hidden(w)
         )
         payload = ",".join(hidden)
         if payload == self._announced:

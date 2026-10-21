@@ -442,7 +442,8 @@
    un fundal. Acum toate pornesc de la aceleasi reguli. */
 .cpu-popup, .gpu-popup, .memory-popup, .traffic-menu, .wifi-menu, .bluetooth-menu, .net-status-menu,
 .language-menu, .microphone-menu, .clock-popup, .open-meteo-card, .media-lite-menu,
-.systray-popup, .context-menu, .pomodoro-popup, .wallpaper-palette {
+.systray-popup, .context-menu, .pomodoro-popup, .wallpaper-palette,
+.bar-overflow-menu, .mint-health-panel {
     background-color: rgba(var(--panel-rgb), 0.97);
     color: var(--text);
     border: 1px solid var(--line);
@@ -1086,7 +1087,7 @@
 .desktops-hover .empty { color: var(--muted); font-size: var(--fs-small); }
 
 /* ---- Panoul "Starea barei" (din lansator) ---- */
-.mint-health-panel { min-width: var(--popup-w); }
+.mint-health-panel { min-width: var(--popup-w); }  /* fundalul vine din regula comuna de mai sus */
 .mint-health-panel .header {
     font-size: var(--fs-lead);
     font-weight: 700;
@@ -1107,7 +1108,7 @@
 /* ---- Sageata de la capatul barei si lista ei ---- */
 .bar-overflow-widget .icon { font-size: var(--ic); padding-right: 0; }
 .bar-overflow-widget .icon:hover { color: var(--accent); }
-.bar-overflow-menu { min-width: var(--popup-w); }
+.bar-overflow-menu { min-width: var(--popup-w); }  /* fundalul vine din regula comuna de mai sus */
 .bar-overflow-menu .body { background-color: transparent; padding: 6px; }
 .bar-overflow-menu .row {
     background-color: transparent;
