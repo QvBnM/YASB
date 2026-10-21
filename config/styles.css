@@ -1220,15 +1220,17 @@
    widget-urilor se face din cod (responsive.py), nu din stiluri.
    ================================================================== */
 
-/* ---- normal: e loc, doar strangem putin ---- */
+/* ---- normal: primul pas, si cel mai important sa nu se simta ----
+   Aici se taie un singur pixel de fiecare parte. Injumatatirea de dinainte (6px -> 3px pe
+   fiecare widget, plus grupurile) lipea tot intre ele: bara arata inghesuita chiar si cand
+   avea loc. Strangerea adevarata incepe de la "dense", unde chiar nu mai e loc. */
 .compact .widget .widget-container {
-    padding: 0 3px;
+    padding: 0 5px;
 }
 .compact .sys-group .container,
 .compact .net-group .container,
-.compact .status-group .container,
 .compact .media-group .container {
-    padding: 0 2px 0 4px;
+    padding: 0 3px;
 }
 .compact .active-window-widget .widget-container {
     padding: 0 6px;

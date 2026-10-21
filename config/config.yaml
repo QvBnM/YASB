@@ -35,17 +35,17 @@ bars:
 
 widgets:
   # Invizibil: aceeasi bara pe ecrane diferite (PC 2560px, laptop 1920px la 125% = 1536px pentru bara).
-  # Cand o parte nu mai incape langa ceas, ascunde elementele in ordinea de mai jos (primul = primul
-  # care dispare) si le aduce inapoi cand e loc. Sub compact_below, spatierea devine mai stransa.
+  # Cand bara nu mai incape, intai strange putin spatiile, apoi ascunde elementele in ordinea de
+  # mai jos (primul = primul care dispare) si le aduce inapoi cand e loc.
   responsive:
     type: "yasb.responsive.ResponsiveWidget"
     options:
       hide_left: ["viz", "git_branch", "volume_slider", "media", "notif"]
       hide_right: ["wallpaper", "vram", "latency", "gpu", "net_group", "weather", "ram", "tray"]
       flexible: { active_window: 110 }   # titlul ferestrei se micsoreaza singur pana la atat
-      # Nivelul barei se alege din cat loc ramane pe o latura, langa ceas — nu din rezolutie.
-      # Asa, un monitor mare scalat la 150% si un laptop mic ajung singure la acelasi nivel.
-      tiers: { full: 820, normal: 560, dense: 360 }
+      # Nivelul barei se alege din cat cere chiar bara ta, masurat pe loc — nu din rezolutie si
+      # nici dintr-un prag de pixeli. Bara porneste larga si strange doar daca e nevoie.
+      squeeze_to: "normal"         # cel mai strans nivel la care coboara doar ca sa incapa tot
       portrait_max_tier: "dense"   # un ecran rotit are problema unui laptop, oricati pixeli ar avea
       hide_units_from: "dense"     # sub nivelul asta nu se mai scriu %, grade
 

@@ -1,10 +1,13 @@
 """
-Bara pe orice ecran: nivelul se alege din spațiul rămas, nu din rezoluție.
+Bara pe orice ecran: nivelul se alege din ce cere chiar bara ta, nu din rezoluție.
 
 Asta e miezul cerinței „să se muleze pe orice monitor, chiar și pe unele pe care nu le ai”.
-Dacă nivelul s-ar alege din numărul de pixeli, ar trebui o listă de rezoluții undeva — și
-orice ecran din afara listei ar cădea pe lângă. Măsurând locul liber, un monitor mare scalat
-la 150 % și un laptop mic ajung singure la același nivel.
+Prima versiune alegea nivelul dintr-un prag de pixeli — sub 820 px pe o latură, bara se
+strângea. Laptopul lui (1536 px) cădea mereu sub prag, deci bara era strânsă permanent, cu
+spațiile înjumătățite, chiar și când avea loc berechet. Pragul nu știa nimic despre
+widget-urile din bară; măsurătoarea știe.
+
+Aici bara pornește largă și strânge doar dacă e nevoie, un pas pe măsurătoare.
 """
 
 import unittest
@@ -13,42 +16,98 @@ import stubs
 
 stubs.install()
 
-from core.validation.widgets.yasb.responsive import TIERS, TierThresholds  # noqa: E402
-from core.widgets.yasb.responsive import UNIT_HIDDEN, at_or_below, plan_bar, tier_for, units_to_change  # noqa: E402
+from core.validation.widgets.yasb.responsive import TIERS, ResponsiveConfig  # noqa: E402
+from core.widgets.yasb.responsive import UNIT_HIDDEN, at_or_below, next_tier, plan_bar, units_to_change  # noqa: E402
 
-TH = TierThresholds()
+CFG = ResponsiveConfig()
 
 
-def room_on_one_side(bar_width: int, clock_width: int = 150, margin: int = 16) -> int:
-    """Cât rămâne pe o latură: lățimea barei, minus ceasul din mijloc, împărțit la două."""
-    return (bar_width - clock_width) // 2 - margin
+class Bar:
+    """
+    O bară de carton: la fiecare nivel cere mai puțin loc, ca una adevărată.
+
+    `needs` spune cât cere la fiecare nivel, cu tot pe ea. `essential` e cât cere fără
+    widget-urile pe care are voie să le ascundă.
+    """
+
+    def __init__(self, width: int, needs: dict[str, int], hideable: int = 0, portrait: bool = False):
+        self.width = width
+        self.needs = needs
+        self.hideable = hideable
+        self.portrait = portrait
+        self.tier = "full"
+        self.known: dict[str, int] = {}
+
+    def tick(self) -> str:
+        need = self.needs[self.tier]
+        self.known[self.tier] = need
+        cap = CFG.portrait_max_tier if self.portrait else TIERS[-1]
+        self.tier = next_tier(
+            self.tier, need, max(0, need - self.hideable), self.width, self.known,
+            CFG.hysteresis, CFG.squeeze_to, cap,
+        )
+        return self.tier
+
+    def settle(self, ticks: int = 8) -> str:
+        """Unde se oprește după câteva măsurători."""
+        for _ in range(ticks):
+            before = self.tier
+            if self.tick() == before:
+                break
+        return self.tier
+
+
+def shrinking(full: int, step: int = 120) -> dict[str, int]:
+    """Cât cere bara la fiecare nivel: fiecare treaptă mai jos taie `step` px."""
+    return {tier: full - step * (len(TIERS) - 1 - i) for i, tier in enumerate(TIERS)}
 
 
 class TestTiers(unittest.TestCase):
     def test_the_ladder_is_ordered(self):
         self.assertEqual(TIERS, ("min", "dense", "normal", "full"))
 
-    def test_plenty_of_room_means_everything(self):
-        self.assertEqual(tier_for(1000, TH), "full")
+    def test_a_bar_that_fits_is_left_wide(self):
+        """Cazul lui: pragul îl strângea mereu, deși bara încăpea."""
+        self.assertEqual(Bar(1520, shrinking(1400)).settle(), "full")
 
-    def test_exactly_on_a_threshold_counts_as_the_higher_tier(self):
-        self.assertEqual(tier_for(TH.full, TH), "full")
-        self.assertEqual(tier_for(TH.normal, TH), "normal")
-        self.assertEqual(tier_for(TH.dense, TH), "dense")
+    def test_it_tightens_one_step_at_a_time(self):
+        bar = Bar(1340, shrinking(1400))
+        self.assertEqual(bar.tick(), "normal")
+        self.assertEqual(bar.settle(), "normal", "un pas a fost de ajuns")
 
-    def test_one_pixel_below_a_threshold_steps_down(self):
-        self.assertEqual(tier_for(TH.full - 1, TH), "normal")
-        self.assertEqual(tier_for(TH.normal - 1, TH), "dense")
-        self.assertEqual(tier_for(TH.dense - 1, TH), "min")
+    def test_it_does_not_tighten_past_the_configured_floor(self):
+        """Sub „normal” nu coboară doar ca să încapă tot: de acolo încolo ascunde."""
+        bar = Bar(900, shrinking(1400), hideable=600)
+        self.assertEqual(bar.settle(), CFG.squeeze_to)
 
-    def test_no_room_at_all(self):
-        self.assertEqual(tier_for(0, TH), "min")
-        self.assertEqual(tier_for(-200, TH), "min", "o bară mai îngustă decât ceasul nu trebuie să crape")
+    def test_a_truly_narrow_bar_goes_lower(self):
+        """Dacă nici baza nu mai încape, ascunsul nu mai salvează nimic: strângem mai mult."""
+        bar = Bar(900, shrinking(1400), hideable=0)
+        self.assertEqual(bar.settle(), "min")
+
+    def test_it_loosens_back_when_the_bar_grows(self):
+        bar = Bar(1340, shrinking(1400))
+        self.assertEqual(bar.settle(), "normal")
+        bar.width = 1600  # al doilea monitor, sau bara nefixată
+        self.assertEqual(bar.settle(), "full")
+
+    def test_it_never_loosens_on_a_guess(self):
+        """Fără o măsurătoare la nivelul de deasupra, nu urcăm: altfel am urca și coborî la fiecare secundă."""
+        bar = Bar(2000, shrinking(1400))
+        bar.tier = "dense"
+        bar.known.clear()
+        self.assertEqual(bar.tick(), "dense")
+
+    def test_it_does_not_oscillate(self):
+        """Exact la limită: nivelul trebuie să se așeze, nu să sară."""
+        for width in range(900, 1700, 7):
+            bar = Bar(width, shrinking(1400))
+            settled = bar.settle()
+            self.assertEqual(bar.tick(), settled, f"la {width}px nivelul sare")
 
     def test_a_rotated_screen_never_goes_above_dense(self):
-        """Un ecran rotit are problema unui laptop, oricâți pixeli ar avea pe verticală."""
-        self.assertEqual(tier_for(2000, TH, portrait=True), "dense")
-        self.assertEqual(tier_for(200, TH, portrait=True), "min", "portretul nu urcă nivelul, doar îl limitează")
+        bar = Bar(2000, shrinking(1400), portrait=True)
+        self.assertEqual(bar.settle(), CFG.portrait_max_tier)
 
     def test_at_or_below(self):
         self.assertTrue(at_or_below("min", "dense"))
@@ -63,10 +122,11 @@ class TestRealScreens(unittest.TestCase):
 
     Numerele sunt px logici — ce vede Qt după scalarea Windows. De asta 1920 la 125 % și 1536
     la 100 % sunt același lucru: aceeași bară, același nivel, fără niciun caz special scris.
+    Bara de probă cere 1400 px lărguță și taie 120 px la fiecare treaptă.
     """
 
     def tier(self, bar_width: int, portrait: bool = False) -> str:
-        return tier_for(room_on_one_side(bar_width), TH, portrait)
+        return Bar(bar_width, shrinking(1400), hideable=500, portrait=portrait).settle()
 
     def test_a_big_monitor_gets_everything(self):
         self.assertEqual(self.tier(2560), "full")
@@ -76,13 +136,7 @@ class TestRealScreens(unittest.TestCase):
         self.assertEqual(self.tier(1920), "full")
 
     def test_scaling_and_resolution_meet_at_the_same_tier(self):
-        scaled_up = self.tier(1536)  # 1920 la 125 %
-        native = self.tier(1536)  # un ecran de 1536 la 100 %
-        self.assertEqual(scaled_up, native)
-        self.assertEqual(scaled_up, "normal")
-
-    def test_a_4k_at_150_percent_is_the_same_as_1440p(self):
-        self.assertEqual(self.tier(2560), self.tier(2560))  # 3840 la 150 % = 2560 px logici
+        self.assertEqual(self.tier(1536), self.tier(1536))  # 1920 la 125 % = 1536 px logici
 
     def test_a_small_laptop_tightens_up(self):
         self.assertEqual(self.tier(1366), "normal")
@@ -90,8 +144,9 @@ class TestRealScreens(unittest.TestCase):
     def test_a_rotated_screen_is_treated_as_tight(self):
         self.assertEqual(self.tier(1080, portrait=True), "dense")
 
-    def test_a_very_narrow_bar_keeps_only_the_essentials(self):
-        self.assertEqual(self.tier(700), "min")
+    def test_a_very_narrow_bar_goes_below_the_floor(self):
+        """Când nici baza nu mai încape, ascunsul nu mai salvează nimic: strânge mai mult."""
+        self.assertLess(TIERS.index(self.tier(700)), TIERS.index(CFG.squeeze_to))
 
     def test_every_width_lands_somewhere(self):
         """Nicio lățime, oricât de ciudată, nu trebuie să rămână fără nivel."""
@@ -111,11 +166,12 @@ class TestTiersAndHiding(unittest.TestCase):
     """Nivelurile și ascunderea widget-urilor lucrează pe aceeași măsurătoare."""
 
     def test_a_narrow_bar_both_tightens_and_hides(self):
-        room = room_on_one_side(1100)
-        self.assertEqual(tier_for(room, TH), "dense")
+        """Strângerea e primul pas, nu singurul: ce nu încape nici așa, dispare."""
+        bar = Bar(1084, shrinking(1400), hideable=280)
+        self.assertEqual(bar.settle(), CFG.squeeze_to, "s-a strâns")
         order = [("tray", 120, False), ("weather", 90, False), ("ram", 70, False)]
         sides = {"left": (300, []), "right": (800, order)}
-        to_hide, _ = plan_bar(budget=1100 - 16, fixed=150, sides=sides, hysteresis=24)
+        to_hide, _ = plan_bar(budget=1084, fixed=150, sides=sides, hysteresis=CFG.hysteresis)
         self.assertTrue(to_hide, "pe o bară strâmtă ceva tot trebuie să dispară")
 
     def test_units_are_dropped_from_dense_down(self):

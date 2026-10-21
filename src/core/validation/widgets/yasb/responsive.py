@@ -4,18 +4,10 @@ from pydantic import Field
 
 from core.validation.widgets.base_model import CustomBaseModel
 
-# Cat de stransa e bara. Nivelul se alege din spatiul ramas pe o latura, nu din rezolutia
-# ecranului: asa, un monitor mare scalat la 150% si un laptop mic ajung singure la acelasi
-# nivel, fara nicio setare scrisa pe undeva.
+# Cat de stransa e bara. Nivelul nu se alege din rezolutie si nici dintr-un prag de pixeli:
+# se alege din ce cere chiar bara ta, cu widget-urile tale, masurat pe loc. Asa, acelasi
+# config ajunge singur la nivelul potrivit pe orice ecran, fara nicio lista de rezolutii.
 TIERS = ("min", "dense", "normal", "full")
-
-
-class TierThresholds(CustomBaseModel):
-    """Spatiul liber (px logici) de la care in sus bara trece la nivelul urmator."""
-
-    full: int = Field(default=820, ge=0)
-    normal: int = Field(default=560, ge=0)
-    dense: int = Field(default=360, ge=0)
 
 
 class ResponsiveConfig(CustomBaseModel):
@@ -34,7 +26,11 @@ class ResponsiveConfig(CustomBaseModel):
 
     # Nivelurile pun pe bara clasa "tier-<nume>", folosita in styles.css pentru spatieri mai
     # stranse si text mai mic. Sub "full" se pune si clasa "compact", ca regulile vechi sa tina.
-    tiers: TierThresholds = TierThresholds()
+    #
+    # Cel mai stramt nivel la care bara are voie sa ajunga doar ca sa incapa tot. Sub el coboara
+    # numai cand nici widget-urile de baza (ceasul, titlul ferestrei, starile) nu mai incap --
+    # adica pe un ecran chiar ingust, unde ascunsul singur nu mai salveaza nimic.
+    squeeze_to: Literal["min", "dense", "normal", "full"] = "normal"
     # Un ecran rotit are aceeasi problema ca un laptop, chiar daca numarul de pixeli zice altceva:
     # cu ceasul fixat la mijloc, 1080px latime lasa ~500px pe fiecare latura.
     portrait_max_tier: Literal["min", "dense", "normal", "full"] = "dense"

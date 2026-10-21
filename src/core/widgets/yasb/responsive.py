@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 
 from core.events.service import EventService
 from core.utils.qobject import is_valid_qobject
-from core.validation.widgets.yasb.responsive import TIERS, ResponsiveConfig, TierThresholds
+from core.validation.widgets.yasb.responsive import TIERS, ResponsiveConfig
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb import mint_health as health
@@ -76,26 +76,50 @@ def plan_bar(budget: int, fixed: int, sides: dict[str, tuple[int, list[Entry]]],
     return [], []
 
 
-def tier_for(room: int, thresholds: TierThresholds, portrait: bool = False, portrait_max: str = "dense") -> str:
+def next_tier(
+    current: str,
+    need: int,
+    essential: int,
+    budget: int,
+    known: dict[str, int],
+    hysteresis: int,
+    squeeze_to: str = "normal",
+    cap: str = "full",
+) -> str:
     """
-    How tight the bar is, from the room left on one side of the clock.
+    Nivelul urmator, dintr-o masuratoare adevarata. Un singur pas pe masuratoare.
 
-    Read from the room, not from the screen's resolution: that way a large monitor scaled to
-    150 % and a small laptop land on the same tier by themselves, with no per-screen setting
-    written anywhere. A rotated screen has a laptop's problem whatever its pixel count, so it
-    never goes above `portrait_max`.
+    need      = cat cere bara acum, cu tot ce se vede
+    essential = cat cere fara widget-urile pe care avem voie sa le ascundem
+    budget    = cat are bara
+    known     = cat cerea bara ultima data cand a fost la fiecare nivel
+
+    Prima versiune alegea nivelul dintr-un prag de pixeli: sub 820 px pe o latura, bara trecea
+    pe "normal" si primea clasa "compact". Laptopul tau (1536 px) cade mereu sub pragul ala,
+    deci bara era strasa permanent, cu spatiile injumatatite -- de aici "nu mai intra un ac".
+    Pragul nu stia nimic despre widget-urile tale; masuratoarea stie.
+
+    Ordinea in care cedam, de la ce se simte mai putin la ce se simte mai mult:
+      1. strangem spatiile un pas (pana la `squeeze_to`);
+      2. ascundem widget-urile neimportante (nu aici, vezi plan_bar);
+      3. strangem mai mult -- doar daca nici baza (ceas, titlu, stari) nu mai incape.
+    Inapoi urcam doar cand stim sigur ca incape: cat cerea bara la nivelul de deasupra e
+    masurat, nu ghicit, deci nu putem ajunge sa urcam si sa coboram la fiecare secunda.
     """
-    if room >= thresholds.full:
-        tier = "full"
-    elif room >= thresholds.normal:
-        tier = "normal"
-    elif room >= thresholds.dense:
-        tier = "dense"
-    else:
-        tier = "min"
-    if portrait and TIERS.index(tier) > TIERS.index(portrait_max):
-        tier = portrait_max
-    return tier
+    top = min(TIERS.index(cap), len(TIERS) - 1)
+    i = TIERS.index(current)
+    if i > top:
+        return TIERS[top]
+    floor = min(TIERS.index(squeeze_to), top)
+    if need > budget and i > floor:
+        return TIERS[i - 1]  # strangem, dar nu sub nivelul cerut
+    if essential > budget and i > 0:
+        return TIERS[i - 1]  # nici baza nu incape: ecran chiar ingust
+    if need <= budget and i < top:
+        predicted = known.get(TIERS[i + 1])
+        if predicted is not None and predicted + hysteresis <= budget:
+            return TIERS[i + 1]
+    return current
 
 
 def _really_hidden(widget) -> bool:
@@ -141,6 +165,7 @@ class ResponsiveWidget(BaseWidget):
         self.config = config
         make_invisible(self)
         self._tier: str | None = None
+        self._need_at: dict[str, int] = {}  # cat cerea bara ultima data la fiecare nivel
         self._watched: QWidget | None = None
         self._clock_column: QWidget | None = None
         self._overflow_widget: QWidget | None = None
@@ -171,6 +196,7 @@ class ResponsiveWidget(BaseWidget):
     def _screens_changed(self, *_args) -> None:
         self._watched = None
         self._tier = None
+        self._need_at.clear()
         self._clock_column = None
         QTimer.singleShot(0, self._tick)
         QTimer.singleShot(400, self._tick)  # Qt aseaza barele din nou: mai masuram o data dupa
@@ -236,8 +262,7 @@ class ResponsiveWidget(BaseWidget):
         geometry = screen.geometry()
         return geometry.height() > geometry.width()
 
-    def _apply_tier(self, frame: QWidget, room: int) -> None:
-        tier = tier_for(room, self.config.tiers, self._portrait(frame), self.config.portrait_max_tier)
+    def _set_tier(self, frame: QWidget, tier: str) -> None:
         if tier == self._tier:
             return
         self._tier = tier
@@ -246,7 +271,6 @@ class ResponsiveWidget(BaseWidget):
         set_class_token(frame, "compact", tier != "full")
         self._apply_units(frame, tier)
         refresh_tree(frame)
-        logging.info("responsive: side room %dpx -> tier %s", room, tier)
 
     def _apply_units(self, frame: QWidget, tier: str) -> None:
         """
@@ -284,12 +308,6 @@ class ResponsiveWidget(BaseWidget):
         for w in find_named(names, root):
             found.setdefault(w.widget_name, w)  # type: ignore[attr-defined]
 
-        clock = found.get("clock")
-        center_col = self._column(clock, frame) if clock is not None else None
-        center_w = self._hint(center_col) if center_col is not None else 0
-        # Nivelul (cat de mare e scrisul, cat de strans e spatiul) se ia din locul de pe o
-        # latura: e masura "cat de inghesuita e bara", independenta de rezolutie si de scalare.
-        self._apply_tier(frame, (width - center_w) // 2 - self.config.margin)
         overflow = self._overflow(root)
 
         budget = width - self.config.margin
@@ -325,6 +343,33 @@ class ResponsiveWidget(BaseWidget):
         if not sides:
             self._announce(found)
             return
+
+        # Nivelul se hotaraste din masuratoarea asta, nu dintr-un prag de pixeli: cat cere bara
+        # fata de cat are. "Esential" e cat ar cere si daca am ascunde tot ce avem voie.
+        if self._tier is None:
+            self._set_tier(frame, TIERS[-1])  # pornim larg si strangem doar daca e nevoie
+        need = fixed + sum(n for n, _ in sides.values())
+        essential = fixed + sum(n - sum(w for _, w, hid in order if not hid) for n, order in sides.values())
+        tier = self._tier or TIERS[-1]  # None nu mai e posibil aici, dar type checker-ul nu stie
+        self._need_at[tier] = need
+        wanted = next_tier(
+            tier,
+            need,
+            essential,
+            budget,
+            self._need_at,
+            self.config.hysteresis,
+            self.config.squeeze_to,
+            self.config.portrait_max_tier if self._portrait(frame) else TIERS[-1],
+        )
+        if wanted != tier:
+            logging.info(
+                "responsive: bara %dpx, loc %dpx, cerut %dpx -> nivel %s", width, budget, need, wanted
+            )
+            self._set_tier(frame, wanted)
+            self._announce(found)
+            return  # masuram din nou cu spatiile noi inainte sa ascundem ceva
+
         to_hide, to_show = plan_bar(budget, fixed, sides, self.config.hysteresis)
         for name in to_hide:
             visibility.request(found[name], visibility.SPACE, False)
