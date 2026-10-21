@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Tooling caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Backups left behind by mint_install.py / setup.ps1
+*.mint-bak
+*.bak-*
+*.backup-*
+
+# Runtime output (palette generator, speed test, logs)
+yasb.log
+palette.log
