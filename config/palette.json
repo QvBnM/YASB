@@ -1,0 +1,35 @@
+{
+  "source": "default (Fuji)",
+  "image": null,
+  "palette": {
+    "bar": "#101716",
+    "panel": "#121a19",
+    "card": "#141d1c",
+    "hover": "#1b2826",
+    "line": "#2a3836",
+    "track": "#243231",
+    "dot": "#3a4846",
+    "dot2": "#2c3836",
+    "text": "#e6eceb",
+    "text2": "#c9d3d1",
+    "sub": "#7f908d",
+    "muted": "#55615f",
+    "on": "#0f1716",
+    "accent": "#7dd9c7",
+    "accent2": "#b9d4f0",
+    "danger": "#e78a8a",
+    "white": "#f2f5f4"
+  },
+  "orbit": {
+    "background": "#121a19",
+    "border": "#2a3836",
+    "accent": "#7dd9c7",
+    "on_accent": "#0f1716",
+    "card": "#141d1c",
+    "card_hover": "#1b2826",
+    "text": "#e6eceb",
+    "subtext": "#7f908d",
+    "muted": "#55615f",
+    "danger": "#e78a8a"
+  }
+}

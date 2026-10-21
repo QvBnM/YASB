@@ -1,0 +1,638 @@
+watch_config: true
+watch_stylesheet: true            # palette.css se schimba la fiecare wallpaper -> bara se recoloreaza singura
+debug: false
+
+bars:
+  primary-bar:
+    enabled: true
+    screens: ["*"]
+    class_name: "yasb-bar"
+    alignment:
+      position: "top"
+      align: "center"
+    blur_effect:
+      enabled: false
+    window_flags:
+      always_on_top: true         # bara ramane vizibila si in fullscreen-ul din browsere/playere
+      windows_app_bar: true       # ferestrele maximizate incep imediat sub bara
+      hide_on_fullscreen: false   # jocurile le trateaza window_fix (bara trece in spatele lor)
+    dimensions:
+      width: "100%"               # latimea ecranului, oricare ar fi rezolutia (fiecare monitor separat)
+      height: 34                  # se scaleaza singura cu scalarea Windows (125%, 150%...)
+    # 0 = bara lipita de margini (stanga, dreapta, sus); spatiul de 6px e in interior (styles.css)
+    padding:
+      top: 0
+      left: 0
+      bottom: 0
+      right: 0
+    widgets:
+      # ceasul ramane la mijlocul ecranului (vezi tools/yasb_patch.py); langa el apar,
+      # doar cand e cazul, sesiunea de focus si apelul in curs
+      left: ["launcher", "notif", "desktops", "media_group", "git_branch", "active_window"]
+      center: ["clock", "clock_date", "focus", "call_status"]
+      right: ["weather", "sys_group", "net_group", "tray", "wallpaper", "status_group",
+              "window_fix", "modes", "thresholds", "progress", "cover_accent", "ui_ro", "responsive"]
+
+widgets:
+  # Invizibil: aceeasi bara pe ecrane diferite (PC 2560px, laptop 1920px la 125% = 1536px pentru bara).
+  # Cand o parte nu mai incape langa ceas, ascunde elementele in ordinea de mai jos (primul = primul
+  # care dispare) si le aduce inapoi cand e loc. Sub compact_below, spatierea devine mai stransa.
+  responsive:
+    type: "yasb.responsive.ResponsiveWidget"
+    options:
+      hide_left: ["viz", "git_branch", "volume_slider", "media", "notif"]
+      hide_right: ["wallpaper", "vram", "latency", "gpu", "net_group", "weather", "ram", "tray"]
+      flexible: { active_window: 110 }   # titlul ferestrei se micsoreaza singur pana la atat
+      compact_below: 1800
+
+  # Invizibil: (1) Discord, qBittorrent si alte aplicatii cu bara de titlu proprie, maximizate,
+  # ajungeau cu marginea de jos sub taskbar din cauza barei de sus: le potriveste in spatiul liber.
+  # (2) Fullscreen in browsere si playere (F11, filme): pagina incepe sub bara, nu sub ea ascunsa.
+  # (3) Jocurile pe tot ecranul acopera bara, ca inainte; ea revine cand iesi din joc / fullscreen.
+  window_fix:
+    type: "yasb.window_fix.WindowFixWidget"
+    options:
+      interval: 400
+      processes: []                 # gol = orice fereastra maximizata care iese din ecran
+      # implicit: chrome, msedge, firefox, brave, opera, vivaldi, vlc, mpv, mpc-hc, PotPlayer, Filme si TV
+      # fullscreen_fit: ["chrome.exe", "msedge.exe"]
+
+  # Invizibil: moduri automate. Prima regula care se potriveste castiga.
+  # Pune pe bara clasa "mode-<nume>" (ex. .mode-game in styles.css).
+  modes:
+    type: "yasb.context_mode.ContextModeWidget"
+    options:
+      interval: 700
+      # apar doar cand un mod le cere
+      hidden_by_default: ["git_branch", "focus", "fps", "latency"]
+      mic_ignore: ["python", "pythonw"]   # YASB insusi (vizualizatorul asculta sunetul); adauga ex. "Audacity"
+      modes:
+        - name: "call"              # o aplicatie inregistreaza de la microfon
+          mic_in_use: true
+          hide: ["clock_date", "media_group", "sys_group"]
+        - name: "game"              # jocul din fereastra activa (in fullscreen bara trece in spatele jocului)
+          processes: ["eldenring.exe", "cs2.exe", "VALORANT-Win64-Shipping.exe", "RocketLeague.exe"]
+          hide: ["media_group", "active_window", "weather", "launcher", "notif"]
+          show: ["fps", "latency"]
+          linger: 3000
+        - name: "work"
+          processes: ["Code.exe", "Cursor.exe"]
+          hide: ["media_group"]
+          show: ["git_branch", "focus"]
+
+  # Invizibil: cifrele trec in galben (warn) / rosu (crit) peste prag.
+  # index = a cata cifra din eticheta (0 = prima). Culorile: --warn si --danger.
+  thresholds:
+    type: "yasb.mint_thresholds.MintThresholdsWidget"
+    options:
+      rules:
+        - { widget: "cpu", index: 0, warn: 85, crit: 95 }
+        - { widget: "cpu_temp", index: 0, warn: 80, crit: 90 }
+        - { widget: "gpu", index: 1, warn: 80, crit: 88 }     # a doua cifra = temperatura
+        - { widget: "ram", index: 0, warn: 85, crit: 95 }
+        - { widget: "fps", index: 0, warn: 45, crit: 30, below: true }
+        - { widget: "latency", index: 0, warn: 80, crit: 150 }
+
+  # Invizibil: linia de jos a barei arata progresul (focus, download-uri)
+  progress:
+    type: "yasb.progress_line.ProgressLineWidget"
+    options:
+      height: 2
+      sources: ["pomodoro", "qbittorrent"]   # "media" scos: fara linia care urmareste melodia
+      colors: { media: "accent", pomodoro: "accent2", qbittorrent: "warn" }
+      qbittorrent:
+        enabled: false              # Web UI in qBittorrent + "Bypass authentication for clients on localhost"
+        url: "http://localhost:8080"
+
+  # Invizibil: cat timp canta muzica, grupul media si desktop-urile iau culoarea copertei
+  cover_accent:
+    type: "yasb.cover_accent.CoverAccentWidget"
+    options:
+      targets: ["media_group", "desktops"]
+      min_contrast: 3.0
+      transition: 400
+
+  # Invizibil: popup-urile YASB in romana + calendar mai lizibil
+  ui_ro:
+    type: "yasb.ui_polish.UiPolishWidget"
+    options:
+      calendar:
+        country_code: "RO"
+
+  # ============================ STANGA ============================
+  # Lansatorul YASB (quick_launch): aplicatii, calcule si comenzile barei. Alt+Space il deschide.
+  launcher:
+    type: "yasb.quick_launch.QuickLaunchWidget"
+    options:
+      label: "<span>\uf002</span>"
+      search_placeholder: "Caută o aplicație sau o comandă..."
+      compact_mode: true
+      icon_size: 24
+      popup:
+        width: 560
+        height: 420
+        blur: false
+        round_corners: true
+        border_color: "None"
+      providers:
+        apps: { enabled: true, prefix: "*", priority: 1 }
+        bar_commands:
+          enabled: true
+          prefix: "*"
+          priority: 0
+          commands:
+            - { title: "Comută microfonul", icon: "\uf130", keywords: "mic mut", widget: "mic", callback: "toggle_mute" }
+            - { title: "Pornește / oprește focus-ul", icon: "\uf252", keywords: "pomodoro timer", widget: "focus", callback: "toggle_timer" }
+            - { title: "Resetează focus-ul", icon: "\uf2f9", keywords: "pomodoro", widget: "focus", callback: "reset_timer" }
+            - { title: "Wallpaper următor", icon: "\uf03e", keywords: "fundal paleta", widget: "wallpaper", callback: "next_wallpaper" }
+            - { title: "Wallpaper la întâmplare", icon: "\uf074", keywords: "fundal random", widget: "wallpaper", callback: "random_wallpaper" }
+            - { title: "Galeria de wallpaper", icon: "\uf03e", keywords: "fundal paleta", widget: "wallpaper", callback: "toggle_gallery" }
+            - { title: "Calendar", icon: "\uf073", widget: "clock", callback: "toggle_calendar" }
+            - { title: "Șterge notificările", icon: "\uf1f8", widget: "notif", callback: "clear_notifications" }
+            - { title: "Desktop 1", icon: "\uf108", widget: "desktops", callback: "switch_desktop 1" }
+            - { title: "Desktop 2", icon: "\uf108", widget: "desktops", callback: "switch_desktop 2" }
+            - { title: "Desktop 3", icon: "\uf108", widget: "desktops", callback: "switch_desktop 3" }
+            - { title: "Desktop 4", icon: "\uf108", widget: "desktops", callback: "switch_desktop 4" }
+        calculator: { enabled: true, prefix: "*", priority: 2 }
+        web_search: { enabled: true, prefix: "?", priority: 9 }
+      keybindings:
+        - keys: "alt+space"
+          action: "toggle_quick_launch"
+
+  # Clopotelul: numarul de notificari; mesajele noi apar in bara in locul titlului ferestrei.
+  # click = centrul de notificari; click dreapta = sterge tot
+  notif:
+    type: "yasb.bar_notifications.BarNotificationsWidget"
+    options:
+      label: "<span>{icon}</span>{count}"
+      replace: "active_window"
+      duration: 6
+      ignore_apps: []               # ex. ["Windows Security"]
+
+  # click = comuta desktopul; click dreapta = redenumire / muta fereastra / fixeaza
+  # Desktop-urile goale sunt cercuri; hover = ce aplicatii sunt pe fiecare desktop
+  desktops:
+    type: "yasb.desktops_plus.DesktopsPlusWidget"
+    options:
+      label_workspace_btn: ""
+      label_workspace_active_btn: ""
+      hover:
+        enabled: true
+        delay: 350
+      callbacks:
+        on_left: "activate_workspace"
+        on_right: "toggle_context_menu"
+
+  # butoane | coperta + titlu/artist (click = player) | vizualizator | volum
+  media_group:
+    type: "yasb.grouper.GrouperWidget"
+    options:
+      class_name: "media-group"
+      widgets: ["media_controls", "media", "viz", "volume_slider"]
+
+  media_controls:
+    type: "yasb.media.MediaWidget"
+    options:
+      controls_only: true
+      controls_left: true
+      show_thumbnail: false
+      hide_empty: true
+
+  media:
+    type: "yasb.media_lite.MediaWidget"
+    options:
+      show_thumbnail: true
+      show_title: true
+      show_artist: true
+      image_size: 24
+      thumbnail_corner_radius: 5
+      max_label_size: 24
+      tooltip: true
+      media_menu:
+        blur: false
+        round_corners: true
+        border_color: "None"
+        alignment: "left"
+        direction: "down"
+        offset_top: 6
+        artwork_background: true
+        artwork_blur_radius: 28
+        artwork_dim: 0.8
+        image_size: 140
+        thumbnail_corner_radius: 12
+
+  # fara actiune: apare doar cand un player (Spotify, YouTube...) chiar reda
+  viz:
+    type: "yasb.media_visualizer.MediaVisualizerWidget"
+    options:
+      only_when_media_playing: true   # Wallpaper Engine / jocuri / notificari nu il mai pornesc
+      style: "bars"
+      height: 14
+      hide_idle: true
+      hide_idle_after: 1500
+      bars:
+        count: 6
+        width: 3
+        gap: 3
+
+  # slider de volum direct in bara (difuzor = mut, rotita = volum)
+  volume_slider:
+    type: "yasb.audio_slider.AudioSliderWidget"
+    options:
+      slider_width: 72
+      show_value: true
+
+  # Branch-ul git al proiectului din VS Code (doar in modul "work"). roots = unde stau repo-urile.
+  git_branch:
+    type: "yasb.git_branch.GitBranchWidget"
+    options:
+      roots: ["~/Projects", "~/source/repos", "D:/dev"]
+      callbacks:
+        on_left: "toggle_label"
+        on_right: "open_terminal"   # Windows Terminal in folderul proiectului
+
+  # ============================ CENTRU ============================
+
+  # click = arata numele procesului
+  # Fereastra activa: titlul ocupa tot locul pana la ceas si se taie cu "…" inainte de el
+  active_window:
+    type: "yasb.active_title.ActiveTitleWidget"
+    options:
+      label: "{win[title]}"
+      label_alt: "{win[process][name]}"
+      # "Pagina - Google Chrome" -> "Pagina"
+      rewrite:
+        - pattern: "^(.*?)\\s[-\u2013\u2014]\\s(?:Google Chrome|Mozilla Firefox|Brave|Opera|Microsoft.? Edge)$"
+          replacement: "\\1"
+      label_no_window: ""
+      label_icon: true
+      label_icon_size: 14
+      gap: 24                       # pixeli liberi pastrati inaintea ceasului
+      callbacks:
+        on_left: "do_nothing"         # click dreapta = numele procesului
+        on_right: "toggle_label"
+
+  # click = calendar; click dreapta = data completa
+  clock:
+    type: "yasb.clock.ClockWidget"
+    options:
+      label: "{%H:%M}"
+      label_alt: "{%H:%M:%S}"
+      locale: "ro-RO"
+      # Calendar: stanga = ziua selectata (zi, luna, an, data, saptamana, sarbatoare);
+      # mijloc = luna (rotita = alta luna, click pe zi = detalii); dreapta = alarma, cronometru, sarbatori
+      calendar:
+        blur: false
+        round_corners: true
+        border_color: "None"
+        alignment: "center"
+        direction: "down"
+        offset_top: 6
+        country_code: "RO"
+        show_holidays: true
+        # holiday_color nu mai e scris aici: ui_ro il ia din --danger (paleta din wallpaper)
+        show_week_numbers: true
+        show_years: true
+        extended: true
+      callbacks:
+        on_left: "toggle_calendar"
+        on_right: "toggle_label"
+
+  # Data, gri, langa ora (clasa clock-date in styles.css). Click = acelasi calendar.
+  clock_date:
+    type: "yasb.clock.ClockWidget"
+    options:
+      label: "{%a %d %b}"
+      label_alt: "{%A, %d %B %Y}"
+      class_name: "clock-date"
+      locale: "ro-RO"
+      update_interval: 30000
+      calendar:
+        blur: false
+        round_corners: true
+        border_color: "None"
+        alignment: "center"
+        direction: "down"
+        offset_top: 6
+        country_code: "RO"
+        show_holidays: true
+        show_week_numbers: true
+        show_years: true
+        extended: true
+      callbacks:
+        on_left: "toggle_calendar"
+        on_right: "toggle_label"
+
+  # Sesiune de focus (pomodoro din YASB); apare in modul "work" sau din lansator.
+  # click = porneste / pauza; mijloc = reseteaza; click dreapta = popup cu cercul de progres
+  focus:
+    type: "yasb.pomodoro.PomodoroWidget"
+    options:
+      label: "<span>\uf252</span> Focus {remaining}"
+      label_alt: "<span>\uf252</span> {session}/{total_sessions} {remaining}"
+      class_name: "focus"
+      work_duration: 25
+      break_duration: 5
+      long_break_duration: 15
+      auto_start_breaks: true
+      auto_start_work: false
+      callbacks:
+        on_left: "toggle_timer"
+        on_middle: "reset_timer"
+        on_right: "toggle_menu"
+      menu:
+        blur: false
+        border_color: "None"
+        alignment: "center"
+        circle_background_color: "#0dffffff"
+        circle_work_progress_color: "#b9d4f0"
+        circle_break_progress_color: "#7dd9c7"
+
+  # "În apel 12:04" cat timp o aplicatie inregistreaza de la microfon
+  call_status:
+    type: "yasb.call_status.CallStatusWidget"
+    options:
+      label: "<span>\uf111</span> În apel {elapsed}"
+      label_alt: "<span>\uf111</span> {app} {elapsed}"
+      ignore: ["python", "pythonw"]
+
+  # click = prognoza; click dreapta = oras + descriere. Prima data: click -> alegi orasul.
+  weather:
+    type: "yasb.open_meteo.OpenMeteoWidget"
+    options:
+      label: "<span>{icon}</span> {temp}"
+      label_alt: "{location}: {condition_text}, {temp}"
+      hide_decimal: true
+      units: "metric"
+      callbacks:
+        on_left: "toggle_card"
+        on_right: "toggle_label"
+
+  # ============================ DREAPTA ============================
+  # Sistem: click = popup cu grafic si detalii; click dreapta = valoare alternativa
+  sys_group:
+    type: "yasb.grouper.GrouperWidget"
+    options:
+      class_name: "sys-group"
+      widgets: ["fps", "cpu", "cpu_temp", "gpu", "ram", "vram", "latency"]
+
+  # FPS-ul jocului activ din RivaTuner (MSI Afterburner); doar in modul "game"
+  fps:
+    type: "yasb.rtss_fps.RtssFpsWidget"
+    options:
+      label: "<span>FPS</span> {fps:>3}"
+      label_alt: "<span>FT</span> {frametime:>4.1f}<span class='unit'>ms</span>"
+
+  # Ping catre 1.1.1.1; doar in modul "game"
+  latency:
+    type: "yasb.latency.LatencyWidget"
+    options:
+      host: "1.1.1.1"
+      label: "<span>PING</span> {ms:>3}<span class='unit'>ms</span>"
+
+  # Temperatura CPU din HWiNFO64 (Sensors deschis + Shared Memory Support activ).
+  # Se ascunde singur cand HWiNFO nu ruleaza.
+  cpu_temp:
+    type: "yasb.hwinfo_sensor.HwinfoSensorWidget"
+    options:
+      label: "{value}°C"
+      label_alt: "↑{max}°C"
+      value_width: 2
+      update_interval: 2000
+      hide_if_unavailable: true
+      callbacks:
+        on_left: "toggle_label"
+
+  cpu:
+    type: "yasb.cpu.CpuWidget"
+    options:
+      # :>2.0f = mereu 2 caractere ("86", " 8"): fontul e monospace, deci latimea nu se schimba
+      label: "<span>CPU</span> {info[percent][total]:>2.0f}<span class='unit'>%</span>"
+      label_alt: "<span>CPU</span> {info[freq][current]:>4.0f}<span class='unit'>MHz</span>"
+      update_interval: 1500
+      menu:
+        enabled: true
+        blur: false
+        border_color: "None"
+      callbacks:
+        on_left: "toggle_menu"
+        on_right: "toggle_label"
+
+  gpu:
+    type: "yasb.gpu.GpuWidget"
+    options:
+      label: "<span>GPU</span> {info[utilization]:>2}<span class='unit'>%</span> {info[temp]:>2}<span class='unit'>°C</span>"
+      label_alt: "<span>GPU</span> {info[power_draw]:>3}<span class='unit'>W</span>"
+      hide_decimal: true
+      update_interval: 2000
+      menu:
+        enabled: true
+        blur: false
+        border_color: "None"
+      callbacks:
+        on_left: "toggle_menu"
+        on_right: "toggle_label"
+
+  ram:
+    type: "yasb.memory.MemoryWidget"
+    options:
+      label: "<span>RAM</span> {virtual_mem_percent}<span class='unit'>%</span>"
+      label_alt: "<span>RAM</span> {virtual_mem_used}/{virtual_mem_total}"
+      hide_decimal: true
+      update_interval: 2000
+      menu:
+        enabled: true
+        blur: false
+        border_color: "None"
+      callbacks:
+        on_left: "toggle_menu"
+        on_right: "toggle_label"
+
+  vram:
+    type: "yasb.gpu.GpuWidget"
+    options:
+      class_name: "vram"
+      label: "<span>VRAM</span> {info[mem_used]:>5}"
+      label_alt: "<span>VRAM</span> {info[mem_used]}/{info[mem_total]}"
+      update_interval: 2000
+      menu:
+        enabled: true
+        blur: false
+        border_color: "None"
+      callbacks:
+        on_left: "toggle_menu"
+        on_right: "toggle_label"
+
+  # Retea: doar traficul live. Testul de viteza e in popup-ul de stare (click pe iconita de retea).
+  net_group:
+    type: "yasb.grouper.GrouperWidget"
+    options:
+      class_name: "net-group"
+      widgets: ["net"]
+
+  # Retea: click = popup (viteze, total azi, resetare); click dreapta = total azi
+  net:
+    type: "yasb.traffic.TrafficWidget"
+    options:
+      label: "↓{download_speed} ↑{upload_speed}"
+      label_alt: "<span>NET</span> azi ↓{today_downloaded} ↑{today_uploaded}"
+      speed_unit: "bytes"
+      hide_decimal: true
+      max_label_length: 8             # " 246 KB/s": aliniat la dreapta, latime constanta
+      max_label_length_align: "right"
+      update_interval: 1000
+      menu:
+        blur: false
+        border_color: "None"
+        alignment: "right"
+      callbacks:
+        on_left: "toggle_menu"
+        on_right: "toggle_label"
+
+  # Nefolosit in bara (testul e in popup-ul de retea). Il poti pune inapoi in net_group.
+  # Test de viteza la cerere: click = porneste testul; click dreapta = ping, ora
+  # (__YASB_TOOLS__ e inlocuit de setup.ps1 cu calea reala)
+  speedtest:
+    type: "yasb.net_status.SpeedtestWidget"
+    options:
+      label: "<span>\U000f04c5</span> {result}"
+      label_alt: "<span>\U000f04c5</span> {ping}"
+      callbacks:
+        on_left: "run_test"
+        on_right: "toggle_label"
+
+  # Systray: iconitele aplicatiilor; sageata = iconitele ascunse
+  tray:
+    type: "yasb.systray.SystrayWidget"
+    options:
+      class_name: "systray"
+      label_collapsed: ""
+      label_expanded: ""
+      icon_size: 16
+      show_unpinned: false
+      show_unpinned_button: true
+      show_in_popup: true
+      icons_per_row: 4
+      popup:
+        blur: false
+        border_color: "None"
+
+  # Wallpaper: galeria cu paleta estimata pentru fiecare imagine; click dreapta = urmatorul.
+  # run_after = generatorul tau de paleta ({path} = imaginea aleasa)
+  wallpaper:
+    type: "yasb.wallpaper_palette.WallpaperPaletteWidget"
+    options:
+      label: "<span>\uf03e</span>"
+      image_path: "~/Pictures/Wallpapers"
+      # Gol: yasb_palette.py (pornit la logare) vede singur wallpaper-ul nou in ~2 s si recoloreaza bara.
+      # Nota: cat timp ruleaza Wallpaper Engine, el acopera desktop-ul si paleta vine din wallpaper-ul lui.
+      run_after: []
+      auto_change: false
+      auto_change_minutes: 30
+      menu:
+        alignment: "right"
+        offset_top: 6
+
+  # Stari: limba | microfon | retea | bluetooth | volum | baterie
+  status_group:
+    type: "yasb.grouper.GrouperWidget"
+    options:
+      class_name: "status-group"
+      widgets: ["language", "mic", "network", "bluetooth", "audio_orbit", "battery"]
+
+  language:
+    type: "yasb.language.LanguageWidget"
+    options:
+      label: "<span></span> {lang[language_code]}"
+      label_alt: "<span></span> {lang[full_name]}"
+      callbacks:
+        on_left: "toggle_menu"
+        on_right: "toggle_label"
+
+  # click = microfon pornit / oprit (mut). Fara meniu, fara slider.
+  mic:
+    type: "yasb.microphone.MicrophoneWidget"
+    options:
+      label: "<span>{icon}</span>"
+      label_alt: "<span>{icon}</span>"
+      tooltip: true
+      callbacks:
+        on_left: "toggle_mute"
+        on_middle: "do_nothing"
+        on_right: "toggle_mute"
+
+  # Retea: spune direct cum esti conectat (cablu / Wi-Fi / offline).
+  # click = popup cu conexiunea, placa Wi-Fi, modulul Bluetooth si testul de viteza
+  # (daca PC-ul nu are Wi-Fi sau Bluetooth, scrie asta, nu cauta retele); click dreapta = "Cablu" / numele retelei
+  network:
+    type: "yasb.net_status.NetStatusWidget"
+    options:
+      label: "<span>{icon}</span>"
+      label_alt: "<span>{icon}</span> {name}"
+      update_interval: 3000
+      menu:
+        alignment: "right"
+        show_speedtest: true
+
+  # Bluetooth: apare doar daca PC-ul are modul Bluetooth (verificat la pornire si la 30 s)
+  # click = dispozitive, pornit/oprit; click dreapta = numele dispozitivului
+  bluetooth:
+    type: "yasb.net_status.BluetoothAutoWidget"
+    options:
+      label: "<span>{icon}</span>"
+      label_alt: "<span>{icon}</span> {device_name}"
+      label_no_device: "Bluetooth"
+      max_length: 16
+      max_length_ellipsis: ".."
+      menu_config:
+        blur: false
+        border_color: "None"
+        labels:
+          title: "Bluetooth"
+          your_devices: "Dispozitivele tale"
+          new_devices: "Dispozitive noi"
+          not_connected: "Neconectat"
+          connected: "Conectat"
+          more_settings: "Setări Bluetooth"
+          connect: "Conectează"
+          disconnect: "Deconectează"
+          connecting: "Se conectează"
+          disconnecting: "Se deconectează"
+          pair: "Asociază"
+          manage: "Gestionează"
+          power_on: "Pornit"
+          power_off: "Oprit"
+      callbacks:
+        on_left: "toggle_menu"
+        on_right: "toggle_label"
+
+  # click = panoul de sunet; click dreapta = mut
+  audio_orbit:
+    type: "yasb.audio_orbit.AudioOrbitWidget"
+    options:
+      label: "<span>{icon}</span>"            # procentul e deja langa sliderul din media
+      label_alt: "<span>{icon}</span> {device}"
+      max_device_chars: 18
+      scroll_step: 2
+      switch_communications: true
+      colors_source: "palette"    # culorile vin din paleta generata din wallpaper
+      callbacks:
+        on_left: "toggle_menu"
+        on_middle: "toggle_label"
+        on_right: "toggle_mute"
+      menu:
+        alignment: "right"
+        direction: "down"
+        offset_top: 6
+        width: 520
+        height: 480
+        font_family: "JetBrainsMono NF"
+        show_input_tab: true
+        show_settings_node: true
+        animate_orbit: false
+
+  battery:
+    type: "yasb.battery.BatteryWidget"
+    options:
+      label: "<span>{icon}</span> {percent}%"
+      label_alt: "{percent}% | {time_remaining}"
