@@ -680,6 +680,8 @@
     font-size: var(--fs-small);
     color: var(--danger);
     min-height: 30px;
+    /* plasa: coloana e ingusta, iar un nume lung crestea peste randurile de deasupra */
+    max-height: 56px;
     margin-top: 4px;
 }
 .clock-popup.calendar .extended-container {

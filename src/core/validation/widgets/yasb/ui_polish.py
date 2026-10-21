@@ -47,7 +47,9 @@ class CalendarPolishConfig(CustomBaseModel):
     holiday_color: str = "danger"  # inlocuieste holiday_color scris de mana in config
     full_holiday_names: bool = True
     next_holiday: bool = True
-    next_holiday_format: str = "Următoarea liberă:\n{name}, {when}"
+    # Coloana din stânga calendarului are 150 px: textul trebuie să încapă în două-trei
+    # rânduri scurte, altfel crește peste ce e deasupra. Numele întreg rămâne în tooltip.
+    next_holiday_format: str = "{name}\n{when}"
 
 
 class UiPolishConfig(CustomBaseModel):

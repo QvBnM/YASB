@@ -268,10 +268,14 @@ class UiPolishWidget(BaseWidget):
             holiday_label._mint_next = True  # type: ignore[attr-defined]
             nxt = next(((s, n) for s, _e, n in upcoming if s > today), None)
             fallback = ""
+            tip = ""
             if nxt:
                 days = (nxt[0] - today).days
                 when = ro_days(days) if days <= 1 else f"peste {ro_days(days)}"
-                fallback = cfg.next_holiday_format.format(name=nxt[1], when=when)
+                fallback = cfg.next_holiday_format.format(name=short_holiday(nxt[1]), when=when)
+                tip = f"Următoarea zi liberă: {nxt[1]}, {when}"
+            holiday_label.setWordWrap(True)
+            holiday_label.setToolTip(tip)
             original = holiday_label.setText
 
             def set_text(text, _orig=original, _fb=fallback, _lb=holiday_label):
@@ -284,6 +288,23 @@ class UiPolishWidget(BaseWidget):
 
             holiday_label.setText = set_text  # type: ignore[method-assign]
             set_text(holiday_label.text())
+
+
+def short_holiday(name: str, limit: int = 24) -> str:
+    """
+    Numele scurt al unei sarbatori, pentru coloana ingusta din stanga calendarului.
+
+    Numele oficiale sunt lungi: "Sfantul Apostol Andrei, cel Intai chemat, Apostolul
+    romanilor". Pus intreg intr-o coloana de 150 px, textul crestea peste randurile de
+    deasupra si se calca cu ele. Taiem la prima virgula (acolo incepe titulatura) si, daca tot
+    e lung, la ultimul cuvant care incape. Numele intreg ramane in lista din dreapta si in
+    tooltip.
+    """
+    short = name.split(",")[0].split(" - ")[0].strip()
+    if len(short) <= limit:
+        return short
+    cut = short[: limit + 1].rsplit(" ", 1)[0].strip()
+    return (cut or short[:limit]).rstrip(" .,") + "…"
 
 
 def set_class(label: QLabel, upcoming: bool) -> None:

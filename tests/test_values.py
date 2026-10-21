@@ -353,3 +353,52 @@ class TestComDeath(unittest.TestCase):
         err = OSError("rpc")
         err.winerror = -2147023174
         self.assertTrue(com_is_dead(err))
+
+
+class TestShortHolidayNames(unittest.TestCase):
+    """
+    Coloana din stânga calendarului are 150 px: numele lungi nu încap.
+
+    Numele oficiale sunt lungi — „Sfântul Apostol Andrei, cel Întâi chemat, Apostolul
+    românilor". Pus întreg acolo, textul creștea peste rândurile de deasupra și se călca cu
+    ele (se vede în poză). Numele întreg rămâne în lista din dreapta și în tooltip.
+    """
+
+    def test_the_title_after_the_comma_is_dropped(self):
+        from core.widgets.yasb.ui_polish import short_holiday
+
+        name = "Sfântul Apostol Andrei, cel Întâi chemat, Apostolul românilor"
+        self.assertEqual(short_holiday(name), "Sfântul Apostol Andrei")
+
+    def test_a_short_name_is_left_alone(self):
+        from core.widgets.yasb.ui_polish import short_holiday
+
+        for name in ("Crăciunul", "Anul Nou", "Ziua Națională a României"):
+            self.assertEqual(short_holiday(name, limit=30), name)
+
+    def test_a_long_name_without_commas_is_cut_at_a_word(self):
+        from core.widgets.yasb.ui_polish import short_holiday
+
+        short = short_holiday("Adormirea Maicii Domnului Preacurata", limit=24)
+        self.assertLessEqual(len(short), 26)
+        self.assertTrue(short.endswith("…"))
+        self.assertFalse(short.startswith(" "))
+        self.assertIn("Adormirea", short)
+
+    def test_it_never_cuts_a_word_in_half(self):
+        """Limita cade în mijlocul lui „Domnului": tăiem la spațiul dinainte, nu oriunde."""
+        from core.widgets.yasb.ui_polish import short_holiday
+
+        whole = "Sărbătoarea Nașterii Domnului Isus Hristos"
+        short = short_holiday(whole, limit=24)
+        self.assertEqual(short, "Sărbătoarea Nașterii…")
+        self.assertIn(short.rstrip("…").split()[-1], ["Sărbătoarea", "Nașterii"])
+
+    def test_the_default_text_is_two_short_lines(self):
+        from core.validation.widgets.yasb.ui_polish import CalendarPolishConfig
+
+        text = CalendarPolishConfig().next_holiday_format.format(name="Sfântul Apostol Andrei", when="peste 40 de zile")
+        lines = text.split("\n")
+        self.assertEqual(len(lines), 2)
+        for line in lines:
+            self.assertLessEqual(len(line), 24, f"rândul nu încape în coloană: {line}")
