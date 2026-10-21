@@ -30,7 +30,7 @@ bars:
       # doar cand e cazul, sesiunea de focus si apelul in curs
       left: ["launcher", "notif", "desktops", "media_group", "git_branch", "active_window"]
       center: ["clock", "clock_date", "focus", "call_status"]
-      right: ["weather", "sys_group", "net_group", "tray", "wallpaper", "status_group", "overflow",
+      right: ["weather", "sys_group", "net_group", "tray", "status_group", "overflow",
               "window_fix", "modes", "thresholds", "progress", "cover_accent", "ui_ro", "responsive"]
 
 widgets:
@@ -41,7 +41,7 @@ widgets:
     type: "yasb.responsive.ResponsiveWidget"
     options:
       hide_left: ["viz", "git_branch", "volume_slider", "media", "notif"]
-      hide_right: ["wallpaper", "vram", "latency", "gpu", "net_group", "weather", "ram", "tray"]
+      hide_right: ["vram", "latency", "gpu", "net_group", "weather", "ram", "tray"]
       flexible: { active_window: 110 }   # titlul ferestrei se micsoreaza singur pana la atat
       # Nivelul barei se alege din cat cere chiar bara ta, masurat pe loc — nu din rezolutie si
       # nici dintr-un prag de pixeli. Bara porneste larga si strange doar daca e nevoie.
@@ -63,7 +63,6 @@ widgets:
         - { widget: "latency",   title: "Ping", icon: "\uf0ac" }
         - { widget: "weather",   title: "Vremea", icon: "\uf0c2" }
         - { widget: "tray",      title: "Systray", icon: "\uf0ca" }
-        - { widget: "wallpaper", title: "Wallpaper", icon: "\uf03e" }
         - { widget: "media",     title: "Muzica", icon: "\uf001" }
         - { widget: "viz",       title: "Vizualizator", icon: "\uf001" }
         - { widget: "volume_slider", title: "Volum", icon: "\uf028" }
@@ -175,9 +174,6 @@ widgets:
             - { title: "Comută microfonul", icon: "\uf130", keywords: "mic mut", widget: "mic", callback: "toggle_mute" }
             - { title: "Pornește / oprește focus-ul", icon: "\uf252", keywords: "pomodoro timer", widget: "focus", callback: "toggle_timer" }
             - { title: "Resetează focus-ul", icon: "\uf2f9", keywords: "pomodoro", widget: "focus", callback: "reset_timer" }
-            - { title: "Wallpaper următor", icon: "\uf03e", keywords: "fundal paleta", widget: "wallpaper", callback: "next_wallpaper" }
-            - { title: "Wallpaper la întâmplare", icon: "\uf074", keywords: "fundal random", widget: "wallpaper", callback: "random_wallpaper" }
-            - { title: "Galeria de wallpaper", icon: "\uf03e", keywords: "fundal paleta", widget: "wallpaper", callback: "toggle_gallery" }
             - { title: "Calendar", icon: "\uf073", widget: "clock", callback: "toggle_calendar" }
             - { title: "Șterge notificările", icon: "\uf1f8", widget: "notif", callback: "clear_notifications" }
             - { title: "Starea barei", icon: "\uf0f0", keywords: "sanatate erori diagnostic", widget: "responsive", callback: "show_health" }
@@ -549,21 +545,10 @@ widgets:
         blur: false
         border_color: "None"
 
-  # Wallpaper: galeria cu paleta estimata pentru fiecare imagine; click dreapta = urmatorul.
-  # run_after = generatorul tau de paleta ({path} = imaginea aleasa)
-  wallpaper:
-    type: "yasb.wallpaper_palette.WallpaperPaletteWidget"
-    options:
-      label: "<span>\uf03e</span>"
-      image_path: "~/Pictures/Wallpapers"
-      # Gol: yasb_palette.py (pornit la logare) vede singur wallpaper-ul nou in ~2 s si recoloreaza bara.
-      # Nota: cat timp ruleaza Wallpaper Engine, el acopera desktop-ul si paleta vine din wallpaper-ul lui.
-      run_after: []
-      auto_change: false
-      auto_change_minutes: 30
-      menu:
-        alignment: "right"
-        offset_top: 6
+  # Butonul de wallpaper (galerie + wallpaper-ul urmator) a fost scos din bara: nu avea
+  # folder de imagini, deci nu avea ce arata. Culorile barei NU depind de el — ele vin din
+  # tools/yasb_palette.py, care citeste singur wallpaper-ul de pe desktop. Daca il vrei
+  # inapoi: pune "wallpaper" la loc in bara si adauga widget-ul yasb.wallpaper_palette.
 
   # Stari: limba | microfon | retea | bluetooth | volum | baterie
   status_group:
