@@ -329,3 +329,33 @@ class TestDuplicateKeys(unittest.TestCase):
     def test_it_looks_inside_lists_too(self):
         text = "modes:\n  - name: call\n    hide: []\n    hide: [x]\n"
         self.assertTrue(duplicate_keys(text))
+
+
+class TestWidgetsThatCannotBeHidden(unittest.TestCase):
+    """
+    Widget-urile care se arată singure n-au ce căuta în lista de ascundere.
+
+    Placa video din YASB cheamă `show()` la fiecare citire proprie. O ascundeam, reapărea,
+    socoteala o lua de la capăt: în jurnal, șase secunde de zbatere la fiecare pornire. Bara
+    recunoaște asta singură și renunță după două încercări — dar încercările se văd pe ecran,
+    deci mai bine nu le facem deloc.
+    """
+
+    SELF_MANAGING = {"gpu", "vram"}
+
+    def test_they_are_not_in_the_hide_order(self):
+        cfg = load_config(REPO / "config" / "config.yaml")
+        options = (cfg["widgets"]["responsive"] or {}).get("options", {})
+        for side in ("hide_left", "hide_right"):
+            listed = set(options.get(side, []))
+            self.assertEqual(
+                listed & self.SELF_MANAGING,
+                set(),
+                f"{side} conține widget-uri care nu se lasă ascunse",
+            )
+
+    def test_the_hide_order_still_has_something_to_work_with(self):
+        cfg = load_config(REPO / "config" / "config.yaml")
+        options = (cfg["widgets"]["responsive"] or {}).get("options", {})
+        self.assertGreaterEqual(len(options.get("hide_right", [])), 3)
+        self.assertGreaterEqual(len(options.get("hide_left", [])), 3)

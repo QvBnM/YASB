@@ -41,7 +41,11 @@ widgets:
     type: "yasb.responsive.ResponsiveWidget"
     options:
       hide_left: ["viz", "git_branch", "volume_slider", "media", "notif"]
-      hide_right: ["vram", "latency", "gpu", "net_group", "weather", "ram", "tray"]
+      # vram si gpu nu sunt in lista: widget-ul de placa video din YASB se arata singur la
+      # fiecare citire proprie, deci nu se lasa ascuns. Il ascundeam, reaparea, iar socoteala
+      # o lua de la capat — sase secunde de zbatere la fiecare pornire, scrise in jurnal.
+      # Ocupa loc si asa, deci partea dreapta se strange din restul.
+      hide_right: ["latency", "net_group", "weather", "ram", "tray"]
       flexible: { active_window: 110 }   # titlul ferestrei se micsoreaza singur pana la atat
       # Nivelul barei se alege din cat cere chiar bara ta, masurat pe loc — nu din rezolutie si
       # nici dintr-un prag de pixeli. Bara porneste larga si strange doar daca e nevoie.
