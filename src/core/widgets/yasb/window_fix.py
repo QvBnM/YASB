@@ -21,6 +21,7 @@ from PyQt6.QtCore import QTimer
 
 from core.validation.widgets.yasb.window_fix import WindowFixConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb.mint_common import process_name
 
 Rect = tuple[int, int, int, int]  # left, top, right, bottom
@@ -155,7 +156,7 @@ class WindowFixWidget(BaseWidget):
         ]
         self._timer = QTimer(self)
         self._timer.setInterval(config.interval)
-        self._timer.timeout.connect(self._check)
+        health.connect(self._timer, "window_fix", self._check)
         self._timer.start()
         self._game_hwnd = 0  # fullscreen game the bar is hiding behind
         # one window_fix lives in every bar (one per monitor): each guards its own bar
@@ -224,13 +225,13 @@ class WindowFixWidget(BaseWidget):
     def _check(self) -> None:
         try:
             self._check_foreground()
-        except Exception as e:
-            logging.debug("window_fix: %s", e)
+        except Exception as exc:
+            health.failed("window_fix", exc, self._timer.stop)
         if self.config.hide_in_fullscreen_games:
             try:
                 self._fullscreen_games()
-            except Exception as e:
-                logging.debug("window_fix games: %s", e)
+            except Exception as exc:
+                health.failed("window_fix", exc, self._timer.stop)
 
     def _window_info(self, hwnd: int) -> tuple[Rect, Rect, int]:
         """(visible frame, monitor rect, monitor handle) of a window."""

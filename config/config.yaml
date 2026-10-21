@@ -177,6 +177,7 @@ widgets:
             - { title: "Galeria de wallpaper", icon: "\uf03e", keywords: "fundal paleta", widget: "wallpaper", callback: "toggle_gallery" }
             - { title: "Calendar", icon: "\uf073", widget: "clock", callback: "toggle_calendar" }
             - { title: "Șterge notificările", icon: "\uf1f8", widget: "notif", callback: "clear_notifications" }
+            - { title: "Starea barei", icon: "\uf0f0", keywords: "sanatate erori diagnostic", widget: "responsive", callback: "show_health" }
             - { title: "Desktop 1", icon: "\uf108", widget: "desktops", callback: "switch_desktop 1" }
             - { title: "Desktop 2", icon: "\uf108", widget: "desktops", callback: "switch_desktop 2" }
             - { title: "Desktop 3", icon: "\uf108", widget: "desktops", callback: "switch_desktop 3" }

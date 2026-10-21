@@ -21,6 +21,7 @@ from core.events.service import EventService
 from core.validation.widgets.yasb.responsive import TIERS, ResponsiveConfig, TierThresholds
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb.bar_overflow import HIDDEN_EVENT
 from core.widgets.yasb.mint_common import find_named, make_invisible, refresh_tree, set_class_token
 
@@ -95,7 +96,8 @@ class ResponsiveWidget(BaseWidget):
         self._announced: str | None = None
         self._events = EventService()
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
+        health.connect(self._timer, "responsive", self._tick)
+        self.register_callback("show_health", self._show_health)
         self._timer.start(config.interval)
         QTimer.singleShot(600, self._tick)
         self._watch_screens()
@@ -157,8 +159,15 @@ class ResponsiveWidget(BaseWidget):
             self._apply()
         except RuntimeError:
             pass  # a widget was destroyed mid-measure: the next tick sees the new bar
-        except Exception:
-            logging.exception("responsive: evaluation failed")
+        except Exception as exc:
+            health.failed("responsive", exc, self._timer.stop)
+
+    def _show_health(self) -> None:
+        """Panoul „Starea barei”, deschis din lansator. Se aseaza sub mijlocul barei."""
+        root = self.window()
+        if root is None or root is self:
+            return
+        health.show_panel(self._frame(root))
 
     def _portrait(self, frame: QWidget) -> bool:
         screen = frame.screen()

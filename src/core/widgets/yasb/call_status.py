@@ -14,6 +14,7 @@ from PyQt6.QtCore import QTimer
 from core.validation.widgets.yasb.call_status import CallStatusConfig
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb.mint_common import fill_labels, mic_users, toggle_alt
 
 
@@ -42,7 +43,7 @@ class CallStatusWidget(BaseWidget):
         self.callback_middle = config.callbacks.on_middle
         visibility.request(self, visibility.SELF, False)
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self._update)
+        health.connect(self._timer, "call_status", self._update)
         self._timer.start(config.update_interval)
 
     def _toggle(self) -> None:

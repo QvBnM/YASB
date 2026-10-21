@@ -18,6 +18,7 @@ from PyQt6.QtCore import QTimer
 from core.validation.widgets.yasb.rtss_fps import RtssFpsConfig
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb.mint_common import fill_labels, foreground, toggle_alt
 
 RTSS_SIGNATURE = 0x52545353  # "RTSS"
@@ -128,7 +129,7 @@ class RtssFpsWidget(BaseWidget):
         self.callback_right = config.callbacks.on_right
         self.callback_middle = config.callbacks.on_middle
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self._update)
+        health.connect(self._timer, "fps", self._update)
         self._timer.start(config.update_interval)
         reader = self._reader
         self.destroyed.connect(lambda *_: reader.close())

@@ -21,6 +21,7 @@ from PyQt6.QtCore import QTimer, pyqtSignal
 from core.validation.widgets.yasb.git_branch import GitBranchConfig
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb.mint_common import fill_labels, foreground, toggle_alt
 
 EDITOR_TITLES = ("Visual Studio Code", "Cursor", "VSCodium")
@@ -91,7 +92,7 @@ class GitBranchWidget(BaseWidget):
         self.callback_middle = config.callbacks.on_middle
         self._state_ready.connect(self._on_state)
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self._update)
+        health.connect(self._timer, "git_branch", self._update)
         self._timer.start(config.update_interval)
         visibility.request(self, visibility.SELF, False)
         QTimer.singleShot(400, self._update)

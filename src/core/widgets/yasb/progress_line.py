@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import QFrame, QWidget
 
 from core.validation.widgets.yasb.progress_line import ProgressLineConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb.mint_common import PaletteWatcher, make_invisible
 
 # Cat de des ne uitam daca e ceva de aratat. In repaus (fara melodie, fara focus, fara
@@ -78,7 +79,7 @@ class ProgressLineWidget(BaseWidget):
                 logging.warning("progress_line: serviciul media nu e disponibil")
 
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
+        health.connect(self._timer, "progress", self._tick)
         self._timer.start(IDLE_MS)
 
     # ------------------------------------------------------------------ surse

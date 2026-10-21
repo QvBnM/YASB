@@ -21,6 +21,7 @@ from core.utils.tooltip import set_tooltip
 from core.validation.widgets.yasb.hwinfo_sensor import HwinfoSensorConfig
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
+from core.widgets.yasb import mint_health as health
 
 SHARED_MEMORY_NAME = "Global\\HWiNFO_SENS_SM2"
 SIGNATURE = 0x53695748  # "HWiS"
@@ -172,7 +173,7 @@ class HwinfoSensorWidget(BaseWidget):
 
         self._timer = QTimer(self)
         self._timer.setInterval(self.config.update_interval)
-        self._timer.timeout.connect(self._update)
+        health.connect(self._timer, "cpu_temp", self._update)
         self._timer.start()
         self._update()
 

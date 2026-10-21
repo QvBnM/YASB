@@ -1085,6 +1085,25 @@
 .desktops-hover .app-icon { padding: 0 2px; font-size: var(--fs-micro); color: var(--sub); }
 .desktops-hover .empty { color: var(--muted); font-size: var(--fs-small); }
 
+/* ---- Panoul "Starea barei" (din lansator) ---- */
+.mint-health-panel { min-width: var(--popup-w); }
+.mint-health-panel .header {
+    font-size: var(--fs-lead);
+    font-weight: 700;
+    color: var(--text);
+    padding: 12px 14px 10px 14px;
+    border-bottom: 1px solid var(--line);
+}
+.mint-health-panel .body { background-color: transparent; padding: 6px; }
+.mint-health-panel .row { background-color: transparent; border-radius: var(--r-card); padding: 6px 10px; }
+.mint-health-panel .row:hover { background-color: var(--hover); }
+.mint-health-panel .name { font-size: var(--fs-body); font-weight: 600; color: var(--text); }
+.mint-health-panel .detail { font-size: var(--fs-small); color: var(--sub); padding-left: 16px; }
+.mint-health-panel .row.warn .name { color: var(--warn); }
+.mint-health-panel .row.stopped .name { color: var(--danger); }
+.mint-health-panel .row.stopped .detail { color: var(--danger); }
+.mint-health-panel .empty { color: var(--sub); font-size: var(--fs-body); padding: 14px 10px; }
+
 /* ---- Sageata de la capatul barei si lista ei ---- */
 .bar-overflow-widget .icon { font-size: var(--ic); padding-right: 0; }
 .bar-overflow-widget .icon:hover { color: var(--accent); }

@@ -24,6 +24,7 @@ from core.utils.utilities import refresh_widget_style
 from core.validation.widgets.yasb.desktops_plus import DesktopsPlusConfig
 from core.widgets.services.windows_desktops.service import WindowsDesktopService
 from core.widgets.yasb import mint_visibility as visibility
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb.mint_common import ttl_cache
 from core.widgets.yasb.windows_desktops import WorkspaceButton, WorkspaceWidget
 
@@ -177,7 +178,7 @@ class DesktopsPlusWidget(WorkspaceWidget):
             btn._mint_hover = True  # type: ignore[attr-defined]
 
         self._scan_timer = QTimer(self)
-        self._scan_timer.timeout.connect(self._scan)
+        health.connect(self._scan_timer, "desktops", self._scan)
         self._scan_timer.start(config.scan_interval)
         QTimer.singleShot(200, self._scan)
 
@@ -197,8 +198,8 @@ class DesktopsPlusWidget(WorkspaceWidget):
                     self._apply_empty(btn)
                 if self._popup is not None and self._popup.isVisible():
                     self._fill_popup()
-        except Exception:
-            logging.debug("desktops_plus: scanare esuata", exc_info=True)
+        except Exception as exc:
+            health.failed("desktops", exc, self._scan_timer.stop)
 
     # ------------------------------------------------------------------ butoane
 

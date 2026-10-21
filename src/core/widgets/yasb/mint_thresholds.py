@@ -15,7 +15,6 @@ chiar in momentul in care widget-ul isi schimba textul, deci culoarea nu clipest
 
 from __future__ import annotations
 
-import logging
 import re
 
 from PyQt6.QtCore import QTimer
@@ -24,6 +23,7 @@ from PyQt6.QtWidgets import QLabel
 from core.utils.utilities import refresh_widget_style
 from core.validation.widgets.yasb.mint_thresholds import MintThresholdsConfig, ThresholdRule
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb import mint_text
 from core.widgets.yasb.mint_common import find_named, make_invisible
 
@@ -105,7 +105,7 @@ class MintThresholdsWidget(BaseWidget):
         self.config = config
         make_invisible(self)
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self._scan)
+        health.connect(self._timer, "thresholds", self._scan)
         self._timer.start(config.rescan_interval)
         QTimer.singleShot(500, self._scan)
 
@@ -120,5 +120,5 @@ class MintThresholdsWidget(BaseWidget):
                         targets = labels if rule.index is None else labels[rule.index : rule.index + 1]
                         for label in targets:
                             hook_label(label, rule)
-                except Exception:
-                    logging.exception("mint_thresholds: nu pot lega regula pentru %s", rule.widget)
+                except Exception as exc:
+                    health.failed("thresholds", exc, self._timer.stop)

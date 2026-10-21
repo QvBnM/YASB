@@ -25,6 +25,7 @@ from core.events.service import EventService
 from core.validation.widgets.yasb.context_mode import ContextModeConfig, ModeRule
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb.mint_common import (
     Foreground,
     all_bar_widgets,
@@ -55,7 +56,7 @@ class ContextModeWidget(BaseWidget):
 
         self._events = EventService()
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
+        health.connect(self._timer, "modes", self._tick)
         self._timer.start(config.interval)
         QTimer.singleShot(300, self._tick)
 
@@ -104,8 +105,8 @@ class ContextModeWidget(BaseWidget):
                     chosen = rule
                     break
             self._apply(chosen)
-        except Exception:
-            logging.exception("context_mode: tick esuat")
+        except Exception as exc:
+            health.failed("modes", exc, self._timer.stop)
 
     # ------------------------------------------------------------------ aplicare
 

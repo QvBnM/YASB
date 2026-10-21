@@ -54,6 +54,19 @@ să-l pornească), fiecare widget numit într-o regulă din `config.yaml`, fieca
 ei, și fiecare culoare din `styles.css`. Iese cu 1 dacă ceva ar strica bara, iar `setup.ps1` se
 oprește acolo și scrie ce anume.
 
+## Când ceva nu merge
+
+Bara se păzește singură: dacă o piesă dă eroare de trei ori în zece minute, își oprește
+cronometrul, scrie un rând în `yasb.log` și restul barei merge înainte. Nu mai ai o piesă
+stricată care scrie un traceback pe secundă la nesfârșit.
+
+Ca să vezi ce merge și ce nu: `Alt+Space` → **Starea barei**. Panoul arată fiecare piesă, de
+câte ori a trecut, cât durează o trecere, și ce s-a oprit și de ce.
+
+În jurnal scriem tipul erorii și numele piesei, nu mesajul excepției — el poate conține un
+titlu de fereastră, o cale sau un nume de rețea. Traceback-ul întreg rămâne pe nivelul de
+depanare.
+
 ## Teste
 
 ```powershell
@@ -61,7 +74,7 @@ py -3.14 tests\run.py            # toate
 py -3.14 tests\run.py layout     # doar un fișier
 ```
 
-112 verificări, fără Windows, fără PyQt6 și fără pytest: `tests/stubs.py` pune module înlocuitoare
+230 de verificări, fără Windows, fără PyQt6 și fără pytest: `tests/stubs.py` pune module înlocuitoare
 pentru Qt și pentru modulele YASB, ca logica barei să ruleze neschimbată. Rulează singure la fiecare
 modificare (`.github/workflows/tests.yml`). Ce NU acoperă: desenarea propriu-zisă și apelurile către
 Windows și COM.

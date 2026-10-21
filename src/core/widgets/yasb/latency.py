@@ -17,6 +17,7 @@ from PyQt6.QtCore import QTimer, pyqtSignal
 
 from core.validation.widgets.yasb.latency import LatencyConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb.mint_common import fill_labels, set_class_token, toggle_alt
 
 
@@ -97,7 +98,7 @@ class LatencyWidget(BaseWidget):
         self.callback_middle = config.callbacks.on_middle
         self._result.connect(self._on_result)
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self._measure)
+        health.connect(self._timer, "latency", self._measure)
         self._timer.start(config.update_interval)
         self._measure()
 
