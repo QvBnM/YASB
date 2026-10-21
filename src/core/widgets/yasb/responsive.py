@@ -17,9 +17,11 @@ import logging
 from PyQt6.QtCore import QEvent, QObject, QTimer
 from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 
+from core.events.service import EventService
 from core.validation.widgets.yasb.responsive import TIERS, ResponsiveConfig, TierThresholds
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
+from core.widgets.yasb.bar_overflow import HIDDEN_EVENT
 from core.widgets.yasb.mint_common import find_named, make_invisible, refresh_tree, set_class_token
 
 
@@ -90,6 +92,8 @@ class ResponsiveWidget(BaseWidget):
         self._tier: str | None = None
         self._watched: QWidget | None = None
         self._clock_column: QWidget | None = None
+        self._announced: str | None = None
+        self._events = EventService()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(config.interval)
@@ -246,3 +250,20 @@ class ResponsiveWidget(BaseWidget):
                 logging.info(
                     "responsive: bar %dpx, side room %dpx -> hidden %s, shown %s", width, avail, to_hide, to_show
                 )
+        self._announce(found)
+
+    def _announce(self, found: dict[str, QWidget]) -> None:
+        """
+        Spune cine a ramas pe dinafara, ca butonul de la capatul barei sa stie ce sa arate.
+
+        Numai ce am ascuns noi din lipsa de loc: ce ascunde un mod, sau widget-ul insusi fiindca
+        n-are ce arata, nu e "pe dinafara" — e ascuns cu rost.
+        """
+        hidden = sorted(
+            name for name, w in found.items() if not visibility.wants(w, visibility.SPACE)
+        )
+        payload = ",".join(hidden)
+        if payload == self._announced:
+            return
+        self._announced = payload
+        self._events.emit_event(HIDDEN_EVENT, payload)

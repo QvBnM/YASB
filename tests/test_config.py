@@ -223,6 +223,17 @@ class TestContract(unittest.TestCase):
         self.assertNotIn("core.widgets.yasb.mint_common", imports)
         self.assertNotIn("core.validation.widgets.yasb.responsive", imports)
 
+    def test_our_own_modules_taken_from_a_yasb_package_are_not_counted(self):
+        """
+        „from core.widgets.yasb import mint_visibility” ia un modul al nostru dintr-un pachet
+        al lor. Pachetul e al YASB, modulul e al nostru — deci nu e nimic de verificat acolo.
+        Fără distincția asta, doctorul cerea YASB-ului niște nume pe care le-am scris noi.
+        """
+        from_package = scan_yasb_imports().get("core.widgets.yasb", set())
+        for ours in ("mint_visibility", "mint_text", "mint_common", "bar_overflow"):
+            self.assertNotIn(ours, from_package, f"'{ours}' e al nostru, nu al YASB")
+        self.assertIn("clock", from_package, "clock chiar vine din YASB și trebuie verificat")
+
     def test_a_missing_class_is_reported(self):
         root = self._fake_yasb("""
             class WorkspaceButton:

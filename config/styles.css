@@ -1085,6 +1085,36 @@
 .desktops-hover .app-icon { padding: 0 2px; font-size: var(--fs-micro); color: var(--sub); }
 .desktops-hover .empty { color: var(--muted); font-size: var(--fs-small); }
 
+/* ---- Sageata de la capatul barei si lista ei ---- */
+.bar-overflow-widget .icon { font-size: var(--ic); padding-right: 0; }
+.bar-overflow-widget .icon:hover { color: var(--accent); }
+.bar-overflow-menu { min-width: var(--popup-w); }
+.bar-overflow-menu .body { background-color: transparent; padding: 6px; }
+.bar-overflow-menu .row {
+    background-color: transparent;
+    border-radius: var(--r-card);
+    padding: 7px 10px;
+}
+.bar-overflow-menu .row:hover { background-color: var(--hover); }
+.bar-overflow-menu .row-icon {
+    color: var(--sub);
+    font-size: var(--ic-small);
+    padding-right: 10px;
+    min-width: 16px;
+}
+.bar-overflow-menu .row-title { font-size: var(--fs-body); color: var(--text); }
+.bar-overflow-menu .row-value {
+    font-size: var(--fs-body);
+    font-weight: 600;
+    color: var(--text);
+    padding-left: 16px;
+}
+.bar-overflow-menu .empty {
+    color: var(--sub);
+    font-size: var(--fs-body);
+    padding: 14px 10px;
+}
+
 /* ---- Galeria de wallpaper ---- */
 .wallpaper-palette-widget .icon { font-size: var(--ic); padding-right: 0; }
 .wallpaper-palette-widget .icon:hover { color: var(--accent); }

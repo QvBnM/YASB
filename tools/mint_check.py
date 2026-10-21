@@ -200,8 +200,11 @@ def scan_yasb_imports(src: Path | None = None) -> dict[str, set[str]]:
             if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("core."):
                 if _is_ours(node.module):
                     continue
-                names = {alias.name for alias in node.names}
-                used.setdefault(node.module, set()).update(names)
+                # „from core.widgets.yasb import mint_visibility” ia un modul al nostru dintr-un
+                # pachet YASB: pachetul e al lor, modulul e al nostru, deci nu e de verificat.
+                names = {alias.name for alias in node.names if not _is_ours(f"{node.module}.{alias.name}")}
+                if names:
+                    used.setdefault(node.module, set()).update(names)
             elif isinstance(node, ast.Import):
                 for alias in node.names:
                     if alias.name.startswith("core.") and not _is_ours(alias.name):
@@ -218,6 +221,8 @@ CONTRACT_ATTRIBUTES: dict[str, dict[str, list[str]]] = {
             "_init_container",
             "build_widget_label",
             "register_callback",
+            # il folosesc comenzile barei din lansator ca sa apese pe un widget din afara lui
+            "_run_callback",
         ],
     },
     "core.widgets.yasb.windows_desktops": {

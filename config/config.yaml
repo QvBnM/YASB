@@ -30,7 +30,7 @@ bars:
       # doar cand e cazul, sesiunea de focus si apelul in curs
       left: ["launcher", "notif", "desktops", "media_group", "git_branch", "active_window"]
       center: ["clock", "clock_date", "focus", "call_status"]
-      right: ["weather", "sys_group", "net_group", "tray", "wallpaper", "status_group",
+      right: ["weather", "sys_group", "net_group", "tray", "wallpaper", "status_group", "overflow",
               "window_fix", "modes", "thresholds", "progress", "cover_accent", "ui_ro", "responsive"]
 
 widgets:
@@ -48,6 +48,30 @@ widgets:
       tiers: { full: 820, normal: 560, dense: 360 }
       portrait_max_tier: "dense"   # un ecran rotit are problema unui laptop, oricati pixeli ar avea
       hide_units_from: "dense"     # sub nivelul asta nu se mai scriu %, grade
+
+  # Sageata de la capatul barei: apare doar cand ceva n-a mai incaput, si arata ce anume,
+  # cu valorile de acum. Click = lista, click din nou = se inchide.
+  overflow:
+    type: "yasb.bar_overflow.BarOverflowWidget"
+    options:
+      entries:
+        - { widget: "sys_group", title: "Sistem", icon: "\uf2db" }
+        - { widget: "gpu",       title: "Placa video", icon: "\uf26c" }
+        - { widget: "ram",       title: "Memorie", icon: "\uf0a0" }
+        - { widget: "vram",      title: "Memorie video", icon: "\uf0a0" }
+        - { widget: "net_group", title: "Trafic", icon: "\uf0ac" }
+        - { widget: "latency",   title: "Ping", icon: "\uf0ac" }
+        - { widget: "weather",   title: "Vremea", icon: "\uf0c2" }
+        - { widget: "tray",      title: "Systray", icon: "\uf0ca" }
+        - { widget: "wallpaper", title: "Wallpaper", icon: "\uf03e" }
+        - { widget: "media",     title: "Muzica", icon: "\uf001" }
+        - { widget: "viz",       title: "Vizualizator", icon: "\uf001" }
+        - { widget: "volume_slider", title: "Volum", icon: "\uf028" }
+        - { widget: "git_branch", title: "Git", icon: "\uf126" }
+        - { widget: "notif",     title: "Notificări", icon: "\uf0f3" }
+      menu:
+        alignment: "right"
+        offset_top: 6
 
   # Invizibil: (1) Discord, qBittorrent si alte aplicatii cu bara de titlu proprie, maximizate,
   # ajungeau cu marginea de jos sub taskbar din cauza barei de sus: le potriveste in spatiul liber.
