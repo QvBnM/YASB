@@ -11,22 +11,14 @@ class WindowFixConfig(CustomBaseModel):
     processes: list[str] = []
     # never touch these
     exclude: list[str] = ["explorer.exe", "ShellExperienceHost.exe", "SearchHost.exe", "StartMenuExperienceHost.exe"]
-    # fullscreen (F11, video) of these apps starts just below the bar instead of under it;
-    # games are left alone (moving a game's window can break it): the bar simply stays on top
-    fullscreen_fit: list[str] = [
-        "chrome.exe",
-        "msedge.exe",
-        "firefox.exe",
-        "brave.exe",
-        "opera.exe",
-        "vivaldi.exe",
-        "vlc.exe",
-        "mpv.exe",
-        "mpc-hc64.exe",
-        "mpc-be64.exe",
-        "PotPlayerMini64.exe",
-        "Video.UI.exe",
-    ]
+    # Aplicatiile scrise aici nu primesc tot ecranul la fullscreen: fereastra lor incepe sub
+    # bara, iar bara ramane deasupra. Implicit, lista e goala — fullscreen inseamna fullscreen,
+    # bara trece in spate, ca la jocuri.
+    #
+    # Lista nu e goala degeaba: Chrome (si altele ca el) isi pun fereastra inapoi pe tot ecranul
+    # imediat ce o mutam, asa ca ramanea tot peste ecran, doar cu bara deasupra ei — adica
+    # fix ce nu voiai. Pune aici un program doar daca vrei anume ca bara sa stea peste el.
+    fullscreen_fit: list[str] = []
     # any other fullscreen window (games) covers the bar, like before; it comes back when the game
     # leaves fullscreen, is minimized or closed
     hide_in_fullscreen_games: bool = True

@@ -75,15 +75,15 @@ widgets:
 
   # Invizibil: (1) Discord, qBittorrent si alte aplicatii cu bara de titlu proprie, maximizate,
   # ajungeau cu marginea de jos sub taskbar din cauza barei de sus: le potriveste in spatiul liber.
-  # (2) Fullscreen in browsere si playere (F11, filme): pagina incepe sub bara, nu sub ea ascunsa.
-  # (3) Jocurile pe tot ecranul acopera bara, ca inainte; ea revine cand iesi din joc / fullscreen.
+  # (2) Orice fereastra pe tot ecranul (joc, film, F11 in browser) acopera bara; ea revine cand
+  #     iesi din fullscreen. Daca vrei ca peste un anume program bara sa ramana deasupra, scrie-l
+  #     in fullscreen_fit — dar nu toate se lasa: Chrome isi pune fereastra la loc imediat.
   window_fix:
     type: "yasb.window_fix.WindowFixWidget"
     options:
       interval: 400
       processes: []                 # gol = orice fereastra maximizata care iese din ecran
-      # implicit: chrome, msedge, firefox, brave, opera, vivaldi, vlc, mpv, mpc-hc, PotPlayer, Filme si TV
-      # fullscreen_fit: ["chrome.exe", "msedge.exe"]
+      fullscreen_fit: []            # gol = fullscreen inseamna fullscreen, bara trece in spate
 
   # Invizibil: moduri automate. Prima regula care se potriveste castiga.
   # Pune pe bara clasa "mode-<nume>" (ex. .mode-game in styles.css).

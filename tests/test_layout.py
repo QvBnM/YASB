@@ -9,6 +9,7 @@ stubs.install()
 from core.widgets.yasb.responsive import LAST_WIDTH, ResponsiveWidget, plan_bar, still_hidden  # noqa: E402
 from core.widgets.yasb.window_fix import (  # noqa: E402
     compute_fix,
+    keeps_undoing,
     compute_fullscreen_fit,
     covers_monitor,
     is_fullscreen_game,
@@ -241,8 +242,27 @@ class TestFullscreenGame(unittest.TestCase):
         self.assertFalse(is_fullscreen_game("python.exe", "Qt", True, self.FULL, self.MONITOR, self.KEEP))
 
     def test_a_browser_in_fullscreen_keeps_the_bar(self):
-        # chrome e în fullscreen_fit: îl potrivim sub bară, nu ascundem bara
+        # chrome scris anume în fullscreen_fit: îl potrivim sub bară, nu ascundem bara
         self.assertFalse(is_fullscreen_game("chrome.exe", "Chrome_WidgetWin_1", False, self.FULL, self.MONITOR, self.KEEP))
+
+    def test_by_default_fullscreen_means_fullscreen(self):
+        """
+        Fără nicio listă, orice fereastră pe tot ecranul trece peste bară.
+
+        Înainte, browserele erau în listă: le mutam fereastra sub bară. Chrome și-o punea
+        înapoi imediat, noi reîncercam de trei ori la fiecare zece secunde, ore întregi —
+        iar pe ecran rămânea tot ecranul acoperit, cu bara deasupra lui. Adică exact ce nu voiai.
+        """
+        for app in ("chrome.exe", "vlc.exe", "mpv.exe"):
+            self.assertTrue(
+                is_fullscreen_game(app, "Chrome_WidgetWin_1", False, self.FULL, self.MONITOR, set()),
+                f"{app} pe tot ecranul ar trebui să treacă peste bară",
+            )
+
+    def test_the_default_list_is_empty(self):
+        from core.validation.widgets.yasb.window_fix import WindowFixConfig
+
+        self.assertEqual(WindowFixConfig().fullscreen_fit, [])
 
     def test_a_window_that_does_not_cover_the_monitor_does_not(self):
         self.assertFalse(
@@ -252,6 +272,25 @@ class TestFullscreenGame(unittest.TestCase):
     def test_covers_monitor_tolerance(self):
         self.assertTrue(covers_monitor((1, 1, 1919, 1079), self.MONITOR, tolerance=2))
         self.assertFalse(covers_monitor((10, 10, 1910, 1070), self.MONITOR, tolerance=2))
+
+
+class TestGivingUp(unittest.TestCase):
+    """
+    O aplicație care își pune fereastra la loc nu trebuie urmărită la nesfârșit.
+
+    În jurnal se vedea Chrome corectat de trei ori la fiecare zece secunde, ore întregi,
+    fără niciun efect pe ecran.
+    """
+
+    def test_a_couple_of_tries_are_fine(self):
+        self.assertFalse(keeps_undoing([1.0, 2.0]))
+
+    def test_the_third_time_we_stop(self):
+        self.assertTrue(keeps_undoing([1.0, 2.0, 3.0]))
+
+    def test_a_window_we_never_touched(self):
+        self.assertFalse(keeps_undoing([]))
+
 
 
 if __name__ == "__main__":

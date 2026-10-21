@@ -87,6 +87,15 @@ SHELL_PROCESSES = {
 }
 
 
+GIVE_UP_LIMIT = 3  # cate incercari intr-o fereastra de timp inainte sa ne oprim
+GIVE_UP_WINDOW = 10.0  # secunde
+
+
+def keeps_undoing(recent: list[float], limit: int = GIVE_UP_LIMIT) -> bool:
+    """Aplicatia isi pune fereastra la loc dupa fiecare corectie? Atunci nu are rost sa insistam."""
+    return len(recent) >= limit
+
+
 def covers_monitor(frame: Rect, monitor: Rect, tolerance: int = 2) -> bool:
     fl, ft, fr, fb = frame
     ml, mt, mr, mb = monitor
@@ -136,6 +145,7 @@ class WindowFixWidget(BaseWidget):
         self._exclude = {p.lower() for p in config.exclude}
         self._fullscreen_fit = {p.lower() for p in config.fullscreen_fit}
         self._fixes: dict[int, list[float]] = {}  # hwnd -> times corrected (stop if an app fights back)
+        self._gave_up: set[int] = set()  # ferestre care isi pun geometria la loc: le lasam in pace
         self._names: dict[int, str] = {}
         if os.name != "nt":
             return
@@ -323,10 +333,17 @@ class WindowFixWidget(BaseWidget):
             new, why = compute_fix(*args), "maximized inside the work area"
         if new is None:
             return
+        if hwnd in self._gave_up:
+            return
         now = time.monotonic()
-        recent = [t for t in self._fixes.get(hwnd, []) if now - t < 10]
-        if len(recent) >= 3:
-            return  # the app keeps undoing it: don't fight
+        recent = [t for t in self._fixes.get(hwnd, []) if now - t < GIVE_UP_WINDOW]
+        if keeps_undoing(recent, GIVE_UP_LIMIT):
+            # Pana acum reincercam la nesfarsit, din 10 in 10 secunde. In jurnalul tau se vede
+            # exact asta: Chrome isi punea fereastra la loc peste bara, de trei ori la fiecare
+            # zece secunde, ore intregi. Daca nu se lasa, ne oprim si o spunem o data.
+            self._gave_up.add(hwnd)
+            logging.info("window_fix: %s isi pune fereastra la loc; nu mai incerc", name or hwnd)
+            return
         recent.append(now)
         self._fixes[hwnd] = recent
         SWP_NOZORDER, SWP_NOACTIVATE, SWP_NOOWNERZORDER = 0x0004, 0x0010, 0x0200
