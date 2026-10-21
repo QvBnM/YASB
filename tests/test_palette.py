@@ -228,3 +228,68 @@ class TestOnRealImages(unittest.TestCase):
 
         hue = hls(_palette(forest)["accent"])[0]
         self.assertLess(abs(hue - hls("#dec45c")[0]), 0.03, "soarele galben trebuie să dea accentul")
+
+
+class TestAmbience(unittest.TestCase):
+    """
+    Nuanța de ansamblu a imaginii — alta decât accentul.
+
+    Accentul e ce sare în ochi (neonul portocaliu); ansamblul e în ce e scăldată imaginea
+    (albastrul-verzui al stației). Fundalul barei trebuie să vină din ansamblu. Până acum
+    venea din culoarea cu cel mai mult loc — pe o poză de noapte, negrul — iar negrul n-are
+    nuanță, așa că regula cădea pe varianta de rezervă: nuanța accentului. Deci bara ieșea
+    maronie sub un wallpaper albastru-verzui.
+    """
+
+    TEAL = [(0.30, "#000000"), (0.25, "#204146"), (0.20, "#1f4045"), (0.10, "#4c757b"), (0.02, "#ff6a1f")]
+
+    def test_a_teal_photo_has_a_teal_ambience(self):
+        from yasb_palette import ambience
+
+        hue, strength = ambience(self.TEAL)
+        self.assertLess(abs(hue - hls("#204146")[0]), 0.05, f"nuanță greșită: {hue * 360:.0f}°")
+        self.assertGreater(strength, 0.05)
+
+    def test_a_thin_neon_does_not_set_the_mood(self):
+        """Dunga portocalie e accentul, nu atmosfera: 2 % nu are voie să întoarcă bara pe cald."""
+        from yasb_palette import ambience
+
+        hue, _ = ambience(self.TEAL)
+        self.assertGreater(abs(hue - hls("#ff6a1f")[0]), 0.2)
+
+    def test_grey_has_no_mood(self):
+        from yasb_palette import ambience
+
+        _hue, strength = ambience([(0.7, "#2b2b2b"), (0.3, "#777777")])
+        self.assertEqual(strength, 0.0)
+
+    def test_hues_are_averaged_around_the_circle(self):
+        """Roșu la 350° și roșu la 10° dau roșu, nu verde (media simplă ar da 180°)."""
+        from yasb_palette import ambience
+
+        hue, _ = ambience([(0.5, "#ff0066"), (0.5, "#ff6600")])
+        self.assertLess(min(hue, 1 - hue), 0.08, f"a ieșit {hue * 360:.0f}°")
+
+
+@unittest.skipUnless(HAS_PIL, "fără Pillow nu putem citi imagini")
+class TestTheBarMatchesThePhoto(unittest.TestCase):
+    def test_a_cold_photo_gives_a_cold_bar(self):
+        """Bara ia atmosfera pozei, accentul ia neonul: două întrebări, două răspunsuri."""
+        from yasb_palette import hue_distance
+
+        p = _palette(_night)
+        bar_hue = hls(p["bar"])[0]
+        self.assertLess(abs(bar_hue - hls("#28323e")[0]), 0.08, f"bară {p['bar']}")
+        self.assertGreater(hue_distance(bar_hue, hls(p["accent"])[0]), 100, "bara a luat nuanța accentului")
+
+    def test_the_bar_is_tinted_enough_to_see(self):
+        self.assertGreater(hls(_palette(_night)["bar"])[2], 0.08)
+
+    def test_a_warm_photo_gives_a_warm_bar(self):
+        def sunset(d):
+            d.rectangle([0, 0, 800, 450], fill=(94, 48, 28))
+            d.rectangle([0, 250, 800, 450], fill=(140, 72, 36))
+            d.ellipse([350, 80, 450, 180], fill=(255, 214, 120))
+
+        bar_hue = hls(_palette(sunset)["bar"])[0]
+        self.assertLess(abs(bar_hue - hls("#8c4824")[0]), 0.06, "o poză caldă trebuie să dea o bară caldă")

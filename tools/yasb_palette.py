@@ -233,6 +233,42 @@ def rank_candidates(candidates: list[tuple[float, str]]) -> list[str]:
     return ranked
 
 
+AMBIENCE_MIN_SAT = 0.12  # sub atat, o culoare nu da nicio nuanta: e gri
+
+
+def ambience(candidates: list[tuple[float, str]]) -> tuple[float, float]:
+    """
+    Nuanta de ansamblu a imaginii si cat de colorata e: (nuanta 0..1, saturatie 0..1).
+
+    E alta intrebare decat accentul. Accentul e ce sare in ochi (neonul portocaliu); ansamblul
+    e in ce e scaldata imaginea (albastrul-verzui al statiei). Fundalul barei trebuie sa vina
+    din ansamblu.
+
+    Pana acum venea din culoarea cu cel mai mult loc — adica, pe o poza de noapte, negrul. Un
+    negru n-are nuanta, asa ca regula cadea pe varianta de rezerva: nuanta accentului. Deci
+    bara iesea maronie sub un wallpaper albastru-verzui. Aici cantarim toate culorile cu
+    nuanta dupa cat loc ocupa, pe cerc (altfel rosu si visiniu, 350 si 10 grade, ar da verde
+    la mijloc).
+    """
+    import math
+
+    x = y_ = weight = 0.0
+    for share, color in candidates:
+        h, light, sat = hls(color)
+        if sat < AMBIENCE_MIN_SAT or not (0.04 <= light <= 0.96):
+            continue
+        w = share * sat
+        angle = h * 2 * math.pi
+        x += math.cos(angle) * w
+        y_ += math.sin(angle) * w
+        weight += share
+    if weight <= 0 or (x == 0 and y_ == 0):
+        return 0.0, 0.0
+    hue = (math.atan2(y_, x) / (2 * math.pi)) % 1.0
+    strength = math.hypot(x, y_) / weight  # cat de mult trag culorile in aceeasi directie
+    return hue, strength
+
+
 def build_palette(bg: str, candidates: list[tuple[float, str]]) -> dict[str, str]:
     ranked = rank_candidates(candidates)
     has_accent = bool(ranked)
@@ -248,16 +284,16 @@ def build_palette(bg: str, candidates: list[tuple[float, str]]) -> dict[str, str
     sl = hls(second)[1] if second else 0.78
     accent2 = from_hls(sh, min(max(sl, 0.58), 0.84), min(max(ss, 0.35), 0.80))
 
-    # dark surfaces take the wallpaper's hue: pywal's background when it has a real hue,
-    # otherwise the accent's hue (pywal often returns an almost gray background).
-    # A gray wallpaper (no accent found) stays neutral.
-    bh, bl, bs = hls(bg)
-    if bs >= 0.15 and 0.06 <= bl <= 0.94 and has_accent:
-        hue, tint = bh, min(bs, 0.32)
+    # Suprafetele intunecate iau nuanta de ansamblu a imaginii (vezi `ambience`), nu pe cea a
+    # accentului: sub o poza albastru-verzuie bara trebuie sa fie albastru-verzuie, chiar daca
+    # ce sare in ochi e un neon portocaliu. O imagine fara nicio culoare ramane neutra.
+    amb_hue, amb_strength = ambience(candidates)
+    if amb_strength >= 0.05:
+        hue, tint = amb_hue, min(0.08 + amb_strength, 0.32)
     elif has_accent:
-        hue, tint = ah, 0.24
+        hue, tint = ah, 0.12
     else:
-        hue, tint = bh, 0.03
+        hue, tint = hls(bg)[0], 0.03
 
     def surface(light: float, sat_k: float = 1.0) -> str:
         return from_hls(hue, light, tint * sat_k)
