@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import QLabel
 from core.utils.utilities import refresh_widget_style
 from core.validation.widgets.yasb.mint_thresholds import MintThresholdsConfig, ThresholdRule
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_text
 from core.widgets.yasb.mint_common import find_named, make_invisible
 
 _LEVELS = ("warn", "crit")
@@ -73,27 +74,27 @@ def hook_label(label: QLabel, rule: ThresholdRule) -> None:
             rules.append(rule)
         return
     label._mint_rules = [rule]  # type: ignore[attr-defined]
-    orig_set_text = label.setText
     orig_set_property = label.setProperty
 
     def set_property(name, value):
+        # widget-urile YASB isi rescriu clasa la fiecare actualizare si ne-ar sterge culoarea
         if name == "class" and isinstance(value, str):
             value = with_level(value, evaluate(label.text(), label._mint_rules))  # type: ignore[attr-defined]
         return orig_set_property(name, value)
 
-    def set_text(text):
-        orig_set_text(text)
+    def recolour(text: str) -> None:
         current = label.property("class") or ""
-        new = with_level(current, evaluate(label.text(), label._mint_rules))  # type: ignore[attr-defined]
+        new = with_level(current, evaluate(text, label._mint_rules))  # type: ignore[attr-defined]
         if new != current:
             orig_set_property("class", new)
             refresh_widget_style(label)
 
-    # Widget-urile YASB apeleaza label.setText / label.setProperty din Python,
-    # deci atributele de instanta au prioritate fata de metodele Qt.
+    # Widget-urile YASB apeleaza label.setProperty din Python, deci atributul de instanta
+    # are prioritate fata de metoda Qt.
     label.setProperty = set_property  # type: ignore[method-assign]
-    label.setText = set_text  # type: ignore[method-assign]
-    set_text(label.text())
+    # Culoarea se calculeaza pe textul care chiar se vede, dupa traducere si taiere
+    # (vezi mint_text): nu mai depinde de cine a ajuns primul la eticheta.
+    mint_text.add_observer(label, "thresholds", recolour)
 
 
 class MintThresholdsWidget(BaseWidget):

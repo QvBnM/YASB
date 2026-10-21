@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import QAbstractButton, QApplication, QLabel, QMenu, QWidge
 
 from core.validation.widgets.yasb.ui_polish import UiPolishConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_text
 from core.widgets.yasb.mint_common import PaletteWatcher, make_invisible, ro_day_month, ro_days
 
 _PATCHED_CALENDAR = False
@@ -171,16 +172,9 @@ class UiPolishWidget(BaseWidget):
         if getattr(w, "_mint_tr", False):
             return
         w._mint_tr = True  # type: ignore[attr-defined]
-        original = w.setText  # type: ignore[attr-defined]
-
-        def set_text(text):
-            original(self.translate(text) if isinstance(text, str) else text)
-
-        w.setText = set_text  # type: ignore[attr-defined]
-        current = w.text()  # type: ignore[attr-defined]
-        new = self.translate(current)
-        if new != current:
-            original(new)
+        # Traducerea e doar primul pas din traseul textului (mint_text). Nu mai inlocuim
+        # setText peste ce gasim, deci nu mai conteaza cine a ajuns primul la eticheta.
+        mint_text.add_stage(w, "translate", self.translate, mint_text.TRANSLATE)
 
     def _polish_tree(self, root: QWidget) -> None:
         try:

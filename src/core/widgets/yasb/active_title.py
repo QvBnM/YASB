@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QLabel, QWidget
 
 from core.utils.qobject import is_valid_qobject
 from core.validation.widgets.yasb.active_title import ActiveTitleConfig
+from core.widgets.yasb import mint_text
 from core.widgets.yasb.active_window import ActiveWindowWidget
 
 
@@ -19,20 +20,17 @@ class ActiveTitleWidget(ActiveWindowWidget):
 
     def __init__(self, config: ActiveTitleConfig):
         super().__init__(config)
-        self._full_title = ""
         self._clock: QWidget | None = None
         label = self._window_title_text
-        self._full_title = label.text()
-        # YASB sets the title through label.setText(...) from Python: route it through the fitter
-        label.setText = self._set_full_title  # type: ignore[method-assign]
+        # the title is the user's own window text: it must never be run through the translations
+        mint_text.exclude(label, "translate")
+        mint_text.add_stage(label, "fit", self._elide, mint_text.FIT)
         self._fit_timer = QTimer(self)
         self._fit_timer.setInterval(1000)
         self._fit_timer.timeout.connect(self._fit)
         self._fit_timer.start()
 
-    def _set_full_title(self, text: str) -> None:
-        self._full_title = text or ""
-        self._fit()
+
 
     def _find_clock(self) -> QWidget | None:
         if self._clock is not None and is_valid_qobject(self._clock) and self._clock.isVisible():
@@ -64,13 +62,18 @@ class ActiveTitleWidget(ActiveWindowWidget):
         right_extra = self.mapToGlobal(QPoint(self.width(), 0)).x() - label.mapToGlobal(QPoint(label.width(), 0)).x()
         return max(self.config.min_width, limit - left - max(right_extra, 0) - self.config.gap)
 
-    def _fit(self) -> None:
+    def _elide(self, text: str) -> str:
+        """One step in the label's text pipeline: cut the title at the free width."""
         label = self._window_title_text
-        if not is_valid_qobject(label):
-            return
+        if not text or not is_valid_qobject(label):
+            return text
         width = self._available_width(label)
-        text = self._full_title
-        if width is not None and text:
-            text = label.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, width)
-        if QLabel.text(label) != text:
-            QLabel.setText(label, text)
+        if width is None:
+            return text
+        return label.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, width)
+
+    def _fit(self) -> None:
+        """The free space next to the clock changed: run the full title through the cut again."""
+        label = self._window_title_text
+        if is_valid_qobject(label):
+            mint_text.render(label)
