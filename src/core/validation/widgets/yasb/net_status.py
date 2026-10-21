@@ -8,6 +8,10 @@ from core.validation.widgets.base_model import (
 
 
 class NetStatusIconsConfig(CustomBaseModel):
+    # Glifele astea sunt din setul Material Design al fontului, nu din Font Awesome ca restul
+    # barei. E o alegere, nu o scapare: Font Awesome 4.7 (cat intra in Nerd Font) nu are
+    # perechi pornit/oprit pentru Wi-Fi si Bluetooth, iar aici tocmai starea e ce conteaza.
+    # Daca se schimba vreodata, se schimba toate sapte odata, ca sa ramana un set.
     ethernet: str = "\U000f0200"
     wifi: str = "\U000f05a9"
     wifi_off: str = "\U000f05aa"

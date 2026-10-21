@@ -495,8 +495,8 @@ widgets:
   speedtest:
     type: "yasb.net_status.SpeedtestWidget"
     options:
-      label: "<span>\U000f04c5</span> {result}"
-      label_alt: "<span>\U000f04c5</span> {ping}"
+      label: "<span>\uf0e4</span> {result}"
+      label_alt: "<span>\uf0e4</span> {ping}"
       callbacks:
         on_left: "run_test"
         on_right: "toggle_label"

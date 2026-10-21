@@ -140,16 +140,22 @@ _HEX = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 _COMMENT = re.compile(r"/\*.*?\*/", re.S)
 
 
+def _without_comments(css: str) -> str:
+    """Un nume scris într-un comentariu nu e nici folosit, nici definit."""
+    return _COMMENT.sub("", css)
+
+
 def css_defined_names(styles: str, palette: str) -> set[str]:
     """Culorile pe care le poate folosi styles.css: din paletă + rezervele dinaintea importului."""
-    names = set(_VAR_DEFINED.findall(palette))
+    styles = _without_comments(styles)
+    names = set(_VAR_DEFINED.findall(_without_comments(palette)))
     names |= set(_VAR_DEFINED.findall(styles.split("@import", 1)[0]))
     names |= {f"{n}-rgb" for n in names}  # generatorul scrie și varianta „r, g, b”
     return names
 
 
 def css_used_names(styles: str) -> set[str]:
-    return set(_VAR_USED.findall(styles))
+    return set(_VAR_USED.findall(_without_comments(styles)))
 
 
 def unresolved_css_vars(styles: str, palette: str) -> list[str]:

@@ -6,9 +6,46 @@
               --text --text2 --sub --muted --on --accent --accent2 --danger --warn --white
    ============================================================ */
 
-/* Rezerva pentru --warn (valori peste prag). Sta INAINTEA importului: daca
-   yasb_palette.py scrie si el --warn in palette.css, valoarea lui castiga. */
+/* ============================================================
+   Jetoanele barei: mărimi, rotunjiri, înălțimea pastilelor.
+
+   Înainte erau douăsprezece mărimi de text puse una câte una, dintre care cinci diferă
+   între ele cu o jumătate de pixel — adică la 100 % se rotunjesc la același pixel, la
+   125 % nu. Aceeași bară arăta altfel pe laptop și pe monitorul mare. Acum textul are
+   șase trepte, iar fiecare are un rol, nu un număr.
+
+   Procesorul CSS din YASB înlocuiește orice var(--x), nu doar culori, deci aici pot sta
+   și mărimi. Stă înaintea importului, ca paleta din wallpaper să poată rescrie culorile.
+   ============================================================ */
 :root {
+    /* text: șase trepte, de la unități la data din calendar */
+    --fs-micro: 10px;    /* unități (%, °C), note mici */
+    --fs-small: 11px;    /* text secundar: artist, stare, subtitluri */
+    --fs-body: 12px;     /* valoarea obișnuită din bară */
+    --fs-lead: 14px;     /* ora, titlurile popup-urilor */
+    --fs-strong: 17px;   /* cifra mare dintr-un popup */
+    --fs-display: 56px;  /* data din calendar */
+
+    /* iconițe: alt fel de mărime decât textul, cu rolurile ei */
+    --ic-dot: 8px;       /* bulina de „în apel” */
+    --ic-small: 12px;    /* glife în capsula de stări */
+    --ic: 14px;          /* glifele obișnuite din bară */
+    --ic-lead: 15px;     /* glifele din rândurile popup-urilor */
+    --ic-xl: 18px;       /* butonul de redare din popup-ul de muzică */
+
+    /* rotunjiri: patru, de la butonaș la popup */
+    --r-chip: 6px;
+    --r-pill: 7px;
+    --r-card: 8px;
+    --r-popup: 10px;
+
+    /* pastilele din bară (stări, focus, notificare): aceeași înălțime, aceeași poziție */
+    --pill-h: 24px;
+    --pill-m: 5px;
+
+    /* lățimea minimă a popup-urilor cu date */
+    --popup-w: 340px;
+
     --warn: #e3c57f;
     --warn-rgb: 227, 197, 127;
 }
@@ -16,7 +53,7 @@
 
 * {
     font-family: "JetBrainsMono NF";
-    font-size: 12px;
+    font-size: var(--fs-body);
     color: var(--text);
 }
 
@@ -37,11 +74,27 @@
 }
 .widget .icon {
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--ic);
     padding-right: 6px;
 }
 .widget .label {
     font-weight: 600;
+}
+
+/* Orice lucru pe care poti da click se lumineaza la trecerea mouse-ului.
+   Lansatorul, butoanele de muzica si systray-ul o faceau deja; capsula de stari, ceasul,
+   vremea si tot grupul de procesor si memorie, nu — desi toate raspund la click. */
+.widget .widget-container:hover {
+    background-color: var(--hover);
+    border-radius: var(--r-chip);
+}
+/* vizualizatorul nu e un buton: deseneaza sunetul */
+.audio-visualizer-widget .widget-container:hover {
+    background-color: transparent;
+}
+/* capsula de stari are deja fundalul ei: se lumineaza celula, nu toata capsula */
+.status-group .container:hover {
+    background-color: var(--hover);
 }
 
 /* Separatoare: doar intre categorii
@@ -58,7 +111,7 @@
 
 /* ================= STANGA ================= */
 .apps-widget .label {
-    font-size: 14px;
+    font-size: var(--fs-lead);
     padding: 0 6px;
 }
 .apps-widget .label:hover {
@@ -71,7 +124,7 @@
 .windows-desktops .ws-btn {
     background-color: var(--dot);
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     min-width: 12px;
     max-width: 12px;
     min-height: 12px;
@@ -97,7 +150,7 @@
 }
 .media-widget .btn {
     color: var(--text);
-    font-size: 14px;
+    font-size: var(--ic);
     padding: 0 6px;
 }
 .media-widget .btn:hover {
@@ -113,12 +166,12 @@
     margin-right: 8px;
 }
 .media-lite-widget .title {
-    font-size: 11.5px;
+    font-size: var(--fs-body);
     font-weight: 600;
     color: var(--text);
 }
 .media-lite-widget .artist {
-    font-size: 9.5px;
+    font-size: var(--fs-micro);
     color: var(--sub);
 }
 .audio-visualizer-widget .widget-container {
@@ -136,7 +189,7 @@
     background: transparent;
     border: none;
     color: var(--text);
-    font-size: 14px;
+    font-size: var(--ic);
     padding: 0 6px 0 0;
 }
 .audio-slider-widget .icon:hover {
@@ -165,31 +218,31 @@
     width: 12px;
     height: 12px;
     margin: -4px 0;
-    border-radius: 6px;
+    border-radius: var(--r-chip);
 }
 .audio-slider-widget .label {
     color: var(--sub);
-    font-size: 11px;
+    font-size: var(--fs-small);
 }
 
 /* ================= CENTRU: doar ceasul ================= */
 .active-window-widget .label {
     color: var(--sub);
-    font-size: 11.5px;
+    font-size: var(--fs-body);
 }
 .clock-widget .label {
     color: var(--accent);
-    font-size: 12.5px;
+    font-size: var(--fs-body);
     font-weight: 700;
 }
 .clock-widget .icon {
     color: var(--sub);
-    font-size: 11.5px;
+    font-size: var(--fs-body);
     font-weight: 500;
     padding: 0 0 0 8px;
 }
 .open-meteo-widget .icon {
-    font-size: 15px;
+    font-size: var(--ic-lead);
 }
 
 /* ================= DREAPTA ================= */
@@ -203,19 +256,19 @@
 .sys-group .icon,
 .traffic-widget .icon {
     color: var(--sub);
-    font-size: 10px;
+    font-size: var(--fs-micro);
     font-weight: 700;
     padding-right: 6px;
 }
 .sys-group .label,
 .traffic-widget .label {
-    font-size: 11.5px;
+    font-size: var(--fs-body);
     font-weight: 600;
 }
 /* Unitatile (%, °C, GB) sunt <span class='unit'> in label: mici, gri, lipite de cifra */
 .unit {
     color: var(--sub);
-    font-size: 10px;
+    font-size: var(--fs-micro);
     font-weight: 700;
     padding: 1px 5px 0 1px;
 }
@@ -233,7 +286,7 @@
 /* CPU si temperatura lui stau lipite: "CPU 86% 84°C" */
 .sys-group .cpu-widget .widget-container { padding-right: 2px; }
 .sys-group .hwinfo-sensor-widget .widget-container { padding-left: 2px; }
-.hwinfo-sensor-widget .label { font-size: 11.5px; font-weight: 600; }
+.hwinfo-sensor-widget .label { font-size: var(--fs-body); font-weight: 600; }
 
 /* Fereastra activa: iconita lipita de titlu */
 .active-window-widget .widget-container { padding: 0 10px; }
@@ -245,11 +298,11 @@
 }
 .speedtest-widget .icon {
     color: var(--accent);
-    font-size: 12px;
+    font-size: var(--ic-small);
     padding-right: 6px;
 }
 .speedtest-widget .label {
-    font-size: 11.5px;
+    font-size: var(--fs-body);
     font-weight: 600;
     color: var(--text);
 }
@@ -265,7 +318,7 @@
     background: transparent;
     border: none;
     color: var(--sub);
-    font-size: 11px;
+    font-size: var(--fs-small);
     padding: 0 4px;
 }
 .systray .unpinned-visibility-btn:hover {
@@ -273,7 +326,7 @@
 }
 /* Iconitele fixate in bara */
 .systray .button {
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     padding: 2px 3px;
     margin: 0 1px;
 }
@@ -285,15 +338,12 @@
 }
 /* Popup-ul dedicat cu iconitele ascunse (grila ca in macheta; Alt+click = fixeaza/scoate) */
 .systray-popup {
-    background-color: rgba(var(--panel-rgb), 0.97);
-    border: 1px solid var(--line);
-    border-radius: 10px;
     padding: 8px;
 }
 .systray-popup .button {
     min-width: 40px;
     min-height: 40px;
-    border-radius: 8px;
+    border-radius: var(--r-card);
     background-color: var(--card);
     margin: 2px;
 }
@@ -305,12 +355,16 @@
     border: 1px dashed var(--accent);
 }
 
-/* Capsula de stari: un singur fundal pentru tot grupul, culoarea doar pentru stare */
+/* Capsula de stari: un singur fundal pentru tot grupul, culoarea doar pentru stare.
+   Cele trei pastile din bara (stari, focus, notificare) aveau inaltimi, rotunjiri si
+   pozitii diferite, fiecare potrivita separat; impreuna se vedea ca o margine care tremura.
+   Acum toate trei folosesc aceleasi jetoane. */
 .status-group .container {
     background-color: var(--hover);
     border: none;
-    border-radius: 7px;
-    margin: 5px 0 5px 6px;
+    border-radius: var(--r-pill);
+    min-height: var(--pill-h);
+    margin: var(--pill-m) 0 var(--pill-m) 6px;
     padding: 0 4px;
 }
 .status-group .widget {
@@ -325,23 +379,34 @@
 .status-group .widget .icon,
 .status-group .widget .label {
     color: var(--text);
-    font-size: 11px;
+    font-size: var(--fs-small);
     font-weight: 700;
 }
 .status-group .widget .icon {
-    font-size: 12px;
+    font-size: var(--ic-small);
     padding-right: 0;
+    /* cutia e rezervata mereu, ca fundalul starii sa aiba loc fara sa miste bara */
+    min-width: 18px;
+    min-height: 18px;
+    border-radius: var(--r-chip);
+    -qproperty-alignment: 'AlignCenter';
 }
 .status-group .language-widget .icon {
     color: var(--sub);
     padding-right: 6px;
 }
-/* Starile care cer atentie */
+/* Starile care cer atentie.
+   Microfonul mut era o glifa rosie mica intr-o capsula gri: o vedeai doar daca te uitai
+   direct la ea — pe dos de cum ar trebui, fiind unul din putinele lucruri care te pot
+   incurca fara sa stii. Acum se coloreaza si fundalul celulei. */
 .status-group .microphone-widget .icon.muted,
 .status-group .microphone-widget .label.muted,
 .status-group .audio-orbit-widget .icon.muted,
 .status-group .audio-orbit-widget .label.muted {
     color: var(--danger);
+}
+.status-group .microphone-widget .icon.muted {
+    background-color: rgba(var(--danger-rgb), 0.18);
 }
 .status-group .bluetooth-widget .icon.connected,
 .status-group .bluetooth-widget .label.connected,
@@ -355,6 +420,9 @@
 .status-group .battery-widget .label.status-low {
     color: var(--danger);
 }
+.status-group .battery-widget .icon.status-critical {
+    background-color: rgba(var(--danger-rgb), 0.18);
+}
 .status-group .battery-widget .icon.status-charging,
 .status-group .battery-widget .label.status-charging {
     color: var(--accent);
@@ -364,12 +432,37 @@
 }
 
 /* ================= Popup-uri (structura reala YASB, culori din paleta) ================= */
-/* Fundal opac din paleta: nu se mai vede ce e in spate */
+/* Popup-urile nu semanau intre ele: jumatate aveau o linie sub titlu, jumatate nu; titlul
+   era scris la doua marimi; latimea minima avea patru valori. Si o despartire mai vizibila —
+   popup-urile adaugate aici aveau contur si colturi rotunjite, cele din YASB pluteau doar cu
+   un fundal. Acum toate pornesc de la aceleasi reguli. */
 .cpu-popup, .gpu-popup, .memory-popup, .traffic-menu, .wifi-menu, .bluetooth-menu, .net-status-menu,
 .language-menu, .microphone-menu, .clock-popup, .open-meteo-card, .media-lite-menu,
-.systray-popup, .context-menu {
+.systray-popup, .context-menu, .pomodoro-popup, .wallpaper-palette {
     background-color: rgba(var(--panel-rgb), 0.97);
     color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: var(--r-popup);
+}
+
+/* Titlul oricarui popup: o singura marime, o singura greutate, aceeasi distanta de margine */
+.cpu-popup .header .text, .gpu-popup .header .text, .memory-popup .header .text,
+.traffic-menu .header .title, .wifi-menu .header .title, .bluetooth-menu .header .title,
+.net-status-menu .header, .wallpaper-palette .header .title {
+    font-size: var(--fs-lead);
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* Linia de sub titlu: o aveau doar jumatate dintre ele */
+.cpu-popup .header, .gpu-popup .header, .memory-popup .header, .traffic-menu .header {
+    border-bottom: 1px solid var(--line);
+}
+
+/* Latimea minima: avea patru valori diferite pentru popup-uri cu acelasi rol */
+.cpu-popup, .gpu-popup, .memory-popup, .traffic-menu,
+.wifi-menu, .bluetooth-menu, .net-status-menu {
+    min-width: var(--popup-w);
 }
 .context-menu {
     border: 1px solid var(--line);
@@ -377,7 +470,7 @@
 }
 .context-menu::item {
     padding: 6px 12px;
-    border-radius: 6px;
+    border-radius: var(--r-chip);
 }
 .context-menu::item:selected {
     background-color: var(--hover);
@@ -385,23 +478,15 @@
 }
 
 /* ---- CPU / GPU / RAM / VRAM: titlu + grafic(e) + carduri cu valori ---- */
-.cpu-popup, .gpu-popup, .memory-popup {
-    min-width: 340px;
-}
 .cpu-popup .header, .gpu-popup .header, .memory-popup .header {
     background: transparent;
-    padding: 12px 14px 6px 16px;
-}
-.cpu-popup .header .text, .gpu-popup .header .text, .memory-popup .header .text {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text);
+    padding: 12px 14px 10px 14px;
 }
 .cpu-popup .header .pin-btn, .gpu-popup .header .pin-btn, .memory-popup .header .pin-btn {
     background: transparent;
     border: none;
     padding: 4px 6px;
-    font-size: 13px;
+    font-size: var(--fs-lead);
     color: var(--sub);
 }
 .cpu-popup .header .pin-btn:hover, .gpu-popup .header .pin-btn:hover, .memory-popup .header .pin-btn:hover,
@@ -410,12 +495,12 @@
 }
 .cpu-popup .graph-container, .gpu-popup .graph-container, .memory-popup .graph-container {
     background-color: var(--card);
-    border-radius: 8px;
+    border-radius: var(--r-card);
     margin: 0 14px;
     min-height: 64px;
 }
 .cpu-popup .graph-title, .gpu-popup .graph-title, .memory-popup .graph-title {
-    font-size: 10.5px;
+    font-size: var(--fs-micro);
     font-weight: 700;
     color: var(--sub);
     padding: 0 0 4px 16px;
@@ -440,47 +525,39 @@
 .cpu-popup .stats .stat-item, .gpu-popup .stats .stat-item, .memory-popup .stats .stat-item {
     background-color: var(--card);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--r-card);
     padding: 6px 10px;
     margin: 5px;
 }
 .cpu-popup .stats .stat-label, .gpu-popup .stats .stat-label, .memory-popup .stats .stat-label {
-    font-size: 10.5px;
+    font-size: var(--fs-micro);
     color: var(--sub);
     padding: 2px 2px 0 2px;
 }
 .cpu-popup .stats .stat-value, .gpu-popup .stats .stat-value, .memory-popup .stats .stat-value {
-    font-size: 15px;
+    font-size: var(--fs-strong);
     font-weight: 700;
     color: var(--text);
     padding: 0 2px 4px 2px;
 }
 
 /* ---- Retea ---- */
-.traffic-menu {
-    min-width: 300px;
-}
 .traffic-menu .header {
-    padding: 12px 14px 6px 16px;
-}
-.traffic-menu .header .title {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text);
+    padding: 12px 14px 10px 14px;
 }
 .traffic-menu .header .reset-button {
     background-color: var(--card);
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     padding: 3px 10px;
     color: var(--sub);
-    font-size: 11px;
+    font-size: var(--fs-small);
 }
 .traffic-menu .header .reset-button:hover {
     color: var(--accent);
 }
 .traffic-menu .interface-info, .traffic-menu .internet-info {
-    font-size: 11px;
+    font-size: var(--fs-small);
     color: var(--sub);
     padding: 0 16px 4px 16px;
 }
@@ -493,17 +570,17 @@
 .traffic-menu .section {
     background-color: var(--card);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--r-card);
     margin: 5px 12px;
     padding: 8px 10px;
 }
 .traffic-menu .section-title {
-    font-size: 10.5px;
+    font-size: var(--fs-micro);
     font-weight: 700;
     color: var(--sub);
 }
 .traffic-menu .download-speed-value, .traffic-menu .upload-speed-value {
-    font-size: 17px;
+    font-size: var(--fs-strong);
     font-weight: 700;
     color: var(--text);
 }
@@ -534,7 +611,7 @@
     background-color: var(--panel);
     color: var(--text);
     font-family: "JetBrainsMono NF";
-    font-size: 12px;
+    font-size: var(--fs-body);
     border: none;
     outline: none;
     margin: 0;
@@ -551,7 +628,7 @@
     background-color: var(--accent);
     color: var(--on);
     font-weight: 700;
-    border-radius: 8px;
+    border-radius: var(--r-card);
 }
 .clock-popup.calendar .day-label,
 .clock-popup.calendar .month-label,
@@ -564,31 +641,31 @@
     max-width: 150px;
 }
 .clock-popup.calendar .day-label {
-    font-size: 15px;
+    font-size: var(--fs-strong);
     font-weight: 700;
     color: var(--text);
     margin-top: 10px;
 }
 .clock-popup.calendar .month-label {
-    font-size: 14px;
+    font-size: var(--fs-lead);
     color: var(--sub);
 }
 .clock-popup.calendar .year-label {
-    font-size: 13px;
+    font-size: var(--fs-lead);
     color: var(--sub);
 }
 .clock-popup.calendar .date-label {
-    font-size: 72px;
+    font-size: var(--fs-display);
     font-weight: 800;
     color: var(--accent);
     margin-top: -6px;
 }
 .clock-popup.calendar .week-label {
-    font-size: 11px;
+    font-size: var(--fs-small);
     color: var(--sub);
 }
 .clock-popup.calendar .holiday-label {
-    font-size: 11px;
+    font-size: var(--fs-small);
     color: var(--danger);
     min-height: 30px;
     margin-top: 4px;
@@ -602,11 +679,11 @@
 .clock-popup.calendar .extended-container .button.alarm.small,
 .clock-popup.calendar .extended-container .button.timer.small {
     font-family: "JetBrainsMono NF";
-    font-size: 12px;
+    font-size: var(--fs-body);
     padding: 4px 8px;
     margin-bottom: 6px;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     background-color: var(--card);
     color: var(--text);
 }
@@ -616,14 +693,14 @@
 }
 .clock-popup.calendar .upcoming-events-header {
     font-family: "JetBrainsMono NF";
-    font-size: 12px;
+    font-size: var(--fs-body);
     font-weight: 700;
     color: var(--text);
     margin: 6px 0 4px 0;
 }
 .clock-popup.calendar .upcoming-events-item {
     font-family: "JetBrainsMono NF";
-    font-size: 11px;
+    font-size: var(--fs-small);
     color: var(--sub);
     padding: 2px 0;
 }
@@ -635,7 +712,7 @@
     background-color: var(--card);
     color: var(--text);
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     padding: 6px 10px;
 }
 .clock-popup .button:hover {
@@ -649,21 +726,21 @@
     color: var(--text);
 }
 .media-lite-menu .title {
-    font-size: 15px;
+    font-size: var(--fs-strong);
     font-weight: 700;
 }
 .media-lite-menu .artist {
-    font-size: 12px;
+    font-size: var(--fs-body);
     color: var(--sub);
 }
 .media-lite-menu .source {
-    font-size: 11px;
+    font-size: var(--fs-small);
     color: var(--accent);
 }
 .media-lite-menu .btn {
-    font-size: 18px;
+    font-size: var(--ic-xl);
     padding: 6px 10px;
-    border-radius: 8px;
+    border-radius: var(--r-card);
 }
 .media-lite-menu .btn:hover {
     color: var(--accent);
@@ -680,7 +757,7 @@
 .tooltip {
     background-color: var(--card);
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     padding: 4px 8px;
     color: var(--text);
 }
@@ -689,18 +766,10 @@
 }
 
 /* ================= Wi-Fi si Bluetooth (popup-urile reale YASB) ================= */
-.wifi-menu, .bluetooth-menu {
-    min-width: 320px;
-}
 .wifi-menu .header, .bluetooth-menu .header {
-    padding: 12px 14px 8px 14px;
+    padding: 12px 14px 10px 14px;
     background-color: transparent;
     border-bottom: 1px solid var(--line);
-}
-.wifi-menu .header, .bluetooth-menu .header .title {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text);
 }
 .wifi-menu .progress-bar {
     color: var(--accent);
@@ -708,7 +777,7 @@
 }
 .wifi-menu .error-message, .bluetooth-menu .error-message {
     color: var(--sub);
-    font-size: 12px;
+    font-size: var(--fs-body);
     padding: 24px 14px;
 }
 /* liste */
@@ -718,13 +787,13 @@
 }
 .bluetooth-menu .section-title {
     color: var(--sub);
-    font-size: 11px;
+    font-size: var(--fs-small);
     font-weight: 700;
     padding: 8px 8px 4px 8px;
 }
 .wifi-menu .wifi-item, .bluetooth-menu .bluetooth-item {
     background-color: transparent;
-    border-radius: 8px;
+    border-radius: var(--r-card);
     padding: 6px 8px;
     margin: 1px 0;
 }
@@ -736,25 +805,26 @@
 }
 .wifi-menu .wifi-item .icon, .bluetooth-menu .bluetooth-item .icon,
 .bluetooth-menu .bluetooth-item .battery-icon {
+    /* glifele de dispozitiv le da Windows, nu fontul barei: aici Segoe e singura sursa */
     font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets";
-    font-size: 15px;
+    font-size: var(--ic-lead);
     color: var(--accent);
     padding-right: 8px;
 }
 .wifi-menu .wifi-item .name, .bluetooth-menu .bluetooth-item .name {
-    font-size: 12px;
+    font-size: var(--fs-body);
     font-weight: 600;
     color: var(--text);
 }
 .wifi-menu .wifi-item .status, .wifi-menu .wifi-item .strength,
 .bluetooth-menu .bluetooth-item .status, .bluetooth-menu .bluetooth-item .battery {
-    font-size: 11px;
+    font-size: var(--fs-small);
     color: var(--sub);
 }
 .wifi-menu .password {
     background-color: var(--card);
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     padding: 5px 8px;
     color: var(--text);
 }
@@ -762,7 +832,7 @@
     background-color: var(--accent);
     color: var(--on);
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     padding: 5px 12px;
     font-weight: 700;
 }
@@ -774,7 +844,7 @@
     background-color: var(--card);
     color: var(--text);
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     padding: 3px 12px;
     font-weight: 700;
 }
@@ -794,18 +864,18 @@
     color: var(--sub);
     border: none;
     padding: 4px 6px;
-    font-size: 12px;
+    font-size: var(--fs-body);
 }
 .wifi-menu .settings-button:hover, .bluetooth-menu .settings-button:hover {
     color: var(--accent);
 }
 .wifi-menu .refresh-icon, .bluetooth-menu .scan-icon {
     font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets";
-    font-size: 13px;
+    font-size: var(--ic);
     background-color: transparent;
     color: var(--sub);
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     padding: 4px 8px;
 }
 .wifi-menu .refresh-icon:hover, .bluetooth-menu .scan-icon:hover {
@@ -815,16 +885,10 @@
 
 /* ================= Retea (net_status: cablu / Wi-Fi / Bluetooth / test viteza) ================= */
 .net-status-widget .icon {
-    font-size: 14px;
+    font-size: var(--ic);
     padding-right: 0;
 }
-.net-status-menu {
-    min-width: 340px;
-}
 .net-status-menu .header {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text);
     padding: 12px 14px 10px 14px;
     border-bottom: 1px solid var(--line);
 }
@@ -840,31 +904,31 @@
     max-width: 30px;
     min-height: 30px;
     max-height: 30px;
-    border-radius: 8px;
+    border-radius: var(--r-card);
     background-color: var(--card);
     color: var(--sub);
-    font-size: 15px;
+    font-size: var(--ic-lead);
 }
 .net-status-menu .row-icon[state="on"] {
     background-color: rgba(var(--accent-rgb), 0.18);
     color: var(--accent);
 }
 .net-status-menu .row-title {
-    font-size: 11px;
+    font-size: var(--fs-small);
     font-weight: 700;
     color: var(--sub);
 }
 .net-status-menu .row-value {
-    font-size: 12px;
+    font-size: var(--fs-body);
     color: var(--text);
 }
 .net-status-menu .row-button {
     background-color: var(--card);
     color: var(--text);
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-chip);
     padding: 4px 10px;
-    font-size: 11px;
+    font-size: var(--fs-small);
 }
 .net-status-menu .row-button:hover {
     background-color: var(--accent);
@@ -894,7 +958,7 @@
 .clock-date .widget-container { padding: 0 6px 0 2px; }
 .clock-date .label {
     color: var(--sub);
-    font-size: 11.5px;
+    font-size: var(--fs-body);
     font-weight: 500;
 }
 .clock-widget .label { min-width: 0; }
@@ -903,29 +967,29 @@
 /* ---- Focus (pomodoro din YASB) ---- */
 .pomodoro-widget.focus .widget-container {
     background-color: rgba(var(--accent2-rgb), 0.12);
-    border-radius: 6px;
-    margin: 6px 0 6px 6px;
+    border-radius: var(--r-pill);
+    min-height: var(--pill-h);
+    margin: var(--pill-m) 0 var(--pill-m) 6px;
     padding: 0 8px;
 }
 .pomodoro-widget.focus .label,
 .pomodoro-widget.focus .icon {
     color: var(--accent2);
-    font-size: 11.5px;
+    font-size: var(--fs-body);
     font-weight: 700;
 }
 .pomodoro-widget.focus .icon { padding-right: 6px; }
-.pomodoro-popup { background-color: rgba(var(--panel-rgb), 0.97); }
 
 /* ---- In apel ---- */
 .call-status-widget .widget-container { padding: 0 10px; }
 .call-status-widget .icon {
     color: var(--danger);
-    font-size: 8px;
+    font-size: var(--ic-dot);
     padding-right: 7px;
 }
 .call-status-widget .label {
     color: var(--danger);
-    font-size: 12px;
+    font-size: var(--fs-body);
     font-weight: 700;
 }
 .mode-call .clock-widget .label { color: var(--sub); }
@@ -937,38 +1001,39 @@
 }
 .git-branch-widget .icon {
     color: var(--accent);
-    font-size: 13px;
+    font-size: var(--ic);
     padding-right: 6px;
 }
-.git-branch-widget .label { font-size: 11.5px; font-weight: 600; }
+.git-branch-widget .label { font-size: var(--fs-body); font-weight: 600; }
 
 /* ---- FPS si ping (stau in sys-group, deci iau stilul "CPU 34%") ---- */
 .latency-widget .label.timeout { color: var(--muted); }
 
 /* ---- Notificari ---- */
 .bar-notifications-widget .widget-container { padding: 0 6px; }
-.bar-notifications-widget .icon { font-size: 14px; padding-right: 0; }
+.bar-notifications-widget .icon { font-size: var(--ic); padding-right: 0; }
 .bar-notifications-widget .icon:hover { color: var(--accent); }
 .bar-notifications-widget .label {
     color: var(--accent);
-    font-size: 10.5px;
+    font-size: var(--fs-micro);
     font-weight: 700;
     padding-left: 3px;
 }
 .mint-toast {
     background-color: var(--hover);
-    border-radius: 7px;
-    margin: 5px 0 5px 10px;
+    border-radius: var(--r-pill);
+    min-height: var(--pill-h);
+    margin: var(--pill-m) 0 var(--pill-m) 10px;
     padding: 0 4px 0 8px;
 }
 .mint-toast .who {
     color: var(--text);
-    font-size: 11.5px;
+    font-size: var(--fs-body);
     font-weight: 700;
 }
 .mint-toast .msg {
     color: var(--text2);
-    font-size: 11.5px;
+    font-size: var(--fs-body);
     font-weight: 500;
     padding-left: 8px;
 }
@@ -976,8 +1041,8 @@
     background-color: rgba(var(--accent-rgb), 0.12);
     color: var(--accent);
     border: none;
-    border-radius: 5px;
-    font-size: 10.5px;
+    border-radius: var(--r-chip);
+    font-size: var(--fs-micro);
     font-weight: 700;
     padding: 1px 7px;
     margin-left: 6px;
@@ -999,35 +1064,30 @@
 .desktops-hover {
     background-color: rgba(var(--panel-rgb), 0.97);
     border: 1px solid var(--line);
-    border-radius: 10px;
+    border-radius: var(--r-popup);
     padding: 6px;
     min-width: 260px;
 }
-.desktops-hover .row { border-radius: 8px; padding: 6px 8px; }
+.desktops-hover .row { border-radius: var(--r-card); padding: 6px 8px; }
 .desktops-hover .row:hover { background-color: var(--hover); }
 .desktops-hover .row.active { background-color: var(--card); }
 .desktops-hover .num {
     color: var(--sub);
-    font-size: 11px;
+    font-size: var(--fs-small);
     font-weight: 700;
     min-width: 18px;
 }
 .desktops-hover .row.active .num { color: var(--accent); }
-.desktops-hover .name { font-size: 12px; font-weight: 600; padding: 0 10px 0 4px; }
+.desktops-hover .name { font-size: var(--fs-body); font-weight: 600; padding: 0 10px 0 4px; }
 .desktops-hover .name.empty { color: var(--sub); }
-.desktops-hover .app-icon { padding: 0 2px; font-size: 10px; color: var(--sub); }
-.desktops-hover .empty { color: var(--muted); font-size: 11px; }
+.desktops-hover .app-icon { padding: 0 2px; font-size: var(--fs-micro); color: var(--sub); }
+.desktops-hover .empty { color: var(--muted); font-size: var(--fs-small); }
 
 /* ---- Galeria de wallpaper ---- */
-.wallpaper-palette-widget .icon { font-size: 14px; padding-right: 0; }
+.wallpaper-palette-widget .icon { font-size: var(--ic); padding-right: 0; }
 .wallpaper-palette-widget .icon:hover { color: var(--accent); }
-.wallpaper-palette {
-    background-color: rgba(var(--panel-rgb), 0.97);
-    border: 1px solid var(--line);
-}
 .wallpaper-palette .header { padding: 12px 14px 10px 14px; border-bottom: 1px solid var(--line); }
-.wallpaper-palette .header .title { font-size: 13px; font-weight: 700; }
-.wallpaper-palette .header .count { color: var(--sub); font-size: 11px; }
+.wallpaper-palette .header .count { color: var(--sub); font-size: var(--fs-small); }
 .wallpaper-palette QScrollArea,
 .wallpaper-palette QScrollArea > QWidget > QWidget,
 .wallpaper-palette .grid { background: transparent; border: none; }
@@ -1035,23 +1095,23 @@
 .wallpaper-palette .card {
     background-color: var(--card);
     border: 1px solid var(--line);
-    border-radius: 9px;
+    border-radius: var(--r-card);
     margin: 4px;
 }
 .wallpaper-palette .card:hover { border-color: var(--sub); }
 .wallpaper-palette .card.active { border-color: var(--accent); }
 .wallpaper-palette .card .thumb { border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .wallpaper-palette .card .meta { padding: 7px 9px 8px 9px; }
-.wallpaper-palette .card .name { font-size: 12px; font-weight: 700; }
-.wallpaper-palette .card .note { color: var(--sub); font-size: 11px; }
+.wallpaper-palette .card .name { font-size: var(--fs-body); font-weight: 700; }
+.wallpaper-palette .card .note { color: var(--sub); font-size: var(--fs-small); }
 .wallpaper-palette .card .note.adjusted { color: var(--warn); }
-.wallpaper-palette .card .state { color: var(--accent); font-size: 11px; font-weight: 700; }
+.wallpaper-palette .card .state { color: var(--accent); font-size: var(--fs-small); font-weight: 700; }
 .wallpaper-palette .footer { padding: 8px 14px; border-top: 1px solid var(--line); }
-.wallpaper-palette .footer-label { color: var(--sub); font-size: 12px; }
+.wallpaper-palette .footer-label { color: var(--sub); font-size: var(--fs-body); }
 .wallpaper-palette .switch {
     background-color: var(--track);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--r-card);
 }
 .wallpaper-palette .switch:checked { background-color: var(--accent); }
 .wallpaper-palette QScrollBar:vertical { background: transparent; width: 6px; margin: 4px 2px; }
@@ -1066,32 +1126,32 @@
 .quick-launch-popup .container {
     background-color: rgba(var(--panel-rgb), 0.97);
     border: 1px solid var(--line);
-    border-radius: 10px;
+    border-radius: var(--r-popup);
 }
 .quick-launch-popup .search {
     border-bottom: 1px solid var(--line);
     padding: 10px 14px;
 }
-.quick-launch-popup .search-icon { color: var(--sub); font-size: 14px; padding-right: 8px; }
+.quick-launch-popup .search-icon { color: var(--sub); font-size: var(--ic); padding-right: 8px; }
 .quick-launch-popup .search-input {
     background: transparent;
     border: none;
     color: var(--text);
-    font-size: 14px;
+    font-size: var(--fs-lead);
     selection-background-color: var(--accent);
     selection-color: var(--on);
 }
 .quick-launch-popup .prefix {
     background-color: rgba(var(--accent-rgb), 0.16);
     color: var(--accent);
-    border-radius: 5px;
+    border-radius: var(--r-chip);
     padding: 1px 6px;
-    font-size: 11px;
+    font-size: var(--fs-small);
     font-weight: 700;
 }
 .quick-launch-popup .results,
 .quick-launch-popup .results-list-view { background: transparent; border: none; }
-.quick-launch-popup .results-list-view::item { border-radius: 8px; padding: 6px 8px; color: var(--text); }
+.quick-launch-popup .results-list-view::item { border-radius: var(--r-card); padding: 6px 8px; color: var(--text); }
 .quick-launch-popup .results-list-view::item:selected { background-color: var(--hover); }
 .quick-launch-popup .results-empty-text { color: var(--sub); }
 .quick-launch-popup .preview { background-color: var(--card); border-left: 1px solid var(--line); }
