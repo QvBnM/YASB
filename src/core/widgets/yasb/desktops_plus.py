@@ -48,6 +48,26 @@ def _enum_windows() -> list[int]:
     return handles
 
 
+# Erorile COM care inseamna "cel de la celalalt capat nu mai e" (de obicei Explorer repornit).
+# Alte erori (o fereastra inchisa intre timp) nu inseamna asta: pe alea le trecem cu vederea.
+COM_DEAD = frozenset(
+    (
+        -2147023174,  # 0x800706BA RPC_S_SERVER_UNAVAILABLE
+        -2147023170,  # 0x800706BE RPC_S_CALL_FAILED
+        -2147417848,  # 0x80010108 RPC_E_DISCONNECTED
+        -2147417856,  # 0x80010100 RPC_E_SYS_CALL_FAILED
+    )
+)
+
+
+def com_is_dead(exc: BaseException) -> bool:
+    """A murit serviciul de la celalalt capat (si trebuie cerut altul), sau a fost o eroare oarecare?"""
+    code = getattr(exc, "hresult", None)
+    if code is None:
+        code = getattr(exc, "winerror", None)
+    return code in COM_DEAD
+
+
 class _WindowScanner:
     """
     Ce aplicatie sta pe ce desktop, citit o singura data pentru toate barele.
@@ -73,7 +93,15 @@ class _WindowScanner:
             if bytes(guid) == b"\x00" * 16:
                 return None  # fereastra fara desktop (fixata pe toate sau fantoma)
             return str(guid).lower()
-        except Exception:
+        except Exception as exc:
+            if com_is_dead(exc):
+                # Explorer s-a repornit si obiectul COM a murit cu el. Pana acum il tineam la
+                # nesfarsit: fiecare apel de dupa arunca, Windows scria in jurnal un raport
+                # intreg cu toate firele (douasprezece in jurnalul tau), iar desktop-urile
+                # ramaneau goale pana la repornirea barei. Il aruncam, ca urmatorul apel sa
+                # ceara unul nou.
+                self._vdm = None
+                logging.info("desktops_plus: serviciul de desktop-uri a murit; cer altul")
             return None
 
     def scan(self, svc, ignored: tuple[str, ...]) -> tuple[list, dict[int, list[DesktopApp]]]:

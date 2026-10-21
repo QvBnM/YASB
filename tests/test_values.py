@@ -313,3 +313,43 @@ class TestMediaButtons(unittest.TestCase):
         for button in first:
             setattr(button, SKIP_HIDDEN, True)
         self.assertEqual(to_trim([media]), [])
+
+
+class TestComDeath(unittest.TestCase):
+    """
+    Când Explorer se repornește, obiectul COM al desktop-urilor moare odată cu el.
+
+    Îl țineam la nesfârșit: fiecare apel de după arunca, Windows scria în jurnal un raport
+    întreg cu toate firele — douăsprezece, în jurnalul lui — iar desktop-urile rămâneau goale
+    până la repornirea barei. Acum îl aruncăm și cerem altul.
+    """
+
+    class ComError(Exception):
+        def __init__(self, hresult):
+            super().__init__("com")
+            self.hresult = hresult
+
+    def test_the_rpc_server_is_gone(self):
+        from core.widgets.yasb.desktops_plus import com_is_dead
+
+        self.assertTrue(com_is_dead(self.ComError(-2147023174)))  # 0x800706BA, cel din jurnal
+
+    def test_every_disconnect_code_counts(self):
+        from core.widgets.yasb.desktops_plus import COM_DEAD, com_is_dead
+
+        for code in COM_DEAD:
+            self.assertTrue(com_is_dead(self.ComError(code)))
+
+    def test_an_ordinary_failure_is_not_a_death(self):
+        """O fereastră închisă între timp nu înseamnă că serviciul a murit: nu-l aruncăm degeaba."""
+        from core.widgets.yasb.desktops_plus import com_is_dead
+
+        self.assertFalse(com_is_dead(self.ComError(-2147024809)))  # E_INVALIDARG
+        self.assertFalse(com_is_dead(ValueError("altceva")))
+
+    def test_a_windows_error_number_counts_too(self):
+        from core.widgets.yasb.desktops_plus import com_is_dead
+
+        err = OSError("rpc")
+        err.winerror = -2147023174
+        self.assertTrue(com_is_dead(err))
