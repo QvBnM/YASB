@@ -6,7 +6,7 @@ import stubs
 
 stubs.install()
 
-from core.widgets.yasb.responsive import LAST_WIDTH, ResponsiveWidget, plan_bar  # noqa: E402
+from core.widgets.yasb.responsive import LAST_WIDTH, ResponsiveWidget, plan_bar, still_hidden  # noqa: E402
 from core.widgets.yasb.window_fix import (  # noqa: E402
     compute_fix,
     compute_fullscreen_fit,
@@ -292,16 +292,21 @@ class TestWidthMemory(unittest.TestCase):
     socoteam 30 px când verificam dacă încape. Acum ținem minte lățimea de dinainte.
     """
 
-    def test_a_visible_widget_is_measured_and_remembered(self):
-        w = FakeWidget(real=120, hint=30)
-        self.assertEqual(ResponsiveWidget._width_of(w, hidden_by_us=False), 120)
-        self.assertEqual(getattr(w, LAST_WIDTH), 120)
+    def test_a_widget_is_measured_the_same_way_as_the_bar(self):
+        """
+        Cât cere o coloană se citește din sizeHint. Dacă pentru un widget luăm în schimb
+        lățimea lui de pe ecran, cele două cifre nu mai sunt din aceeași măsură — iar din
+        asta a ieșit vremea care apărea și dispărea la fiecare câteva minute.
+        """
+        w = FakeWidget(real=70, hint=102)
+        self.assertEqual(ResponsiveWidget._width_of(w, hidden_by_us=False), 102)
+        self.assertEqual(getattr(w, LAST_WIDTH), 102)
 
     def test_a_hidden_widget_keeps_the_width_it_had(self):
-        w = FakeWidget(real=120, hint=30)
+        w = FakeWidget(real=102, hint=102)
         ResponsiveWidget._width_of(w, hidden_by_us=False)
-        w._real = 0  # ascuns: Qt nu îi mai dă lățime
-        self.assertEqual(ResponsiveWidget._width_of(w, hidden_by_us=True), 120)
+        w._hint = 30  # ascuns, unele widget-uri își strâng sizeHint-ul
+        self.assertEqual(ResponsiveWidget._width_of(w, hidden_by_us=True), 102)
 
     def test_a_widget_we_never_saw_falls_back_to_its_size_hint(self):
         w = FakeWidget(real=0, hint=30)
@@ -309,5 +314,37 @@ class TestWidthMemory(unittest.TestCase):
 
     def test_a_widget_without_a_width_yet_is_not_counted_as_zero(self):
         """0 px ar însemna „nu ocupă loc": l-am ascunde fără niciun câștig."""
-        w = FakeWidget(real=0, hint=44)
-        self.assertEqual(ResponsiveWidget._width_of(w, hidden_by_us=False), 44)
+        w = FakeWidget(real=0, hint=0)
+        self.assertEqual(ResponsiveWidget._width_of(w, hidden_by_us=False), 1)
+
+
+class TestTheArrowDoesNotSqueezeThingsOut(unittest.TestCase):
+    """
+    Săgeata de la capăt apare doar cât timp ceva e ascuns, dar ocupă și ea loc.
+
+    Pe bara lui de 1280 px: locul era 1241 px (16 px margine + 23 px ținuți pentru săgeată),
+    iar bara cerea 1250. Adică exact locul săgeții lipsea, vremea nu mai încăpea — și așa
+    săgeata ajungea să provoace ascunderea care o scotea la iveală. Locul ei se ține abia
+    după ce se știe că tot rămâne ceva ascuns.
+    """
+
+    SIDES = {"right": (1250, [("weather", 102, False)])}
+
+    def test_nothing_is_hidden_when_it_fits_without_the_arrow(self):
+        to_hide, _ = plan_bar(1264, 0, self.SIDES, 24)
+        self.assertEqual(to_hide, [])
+        self.assertFalse(still_hidden(self.SIDES, to_hide, []), "nu e nevoie de săgeată")
+
+    def test_the_arrow_keeps_its_room_once_something_is_hidden(self):
+        sides = {"right": (1300, [("weather", 102, False), ("ram", 70, False)])}
+        to_hide, to_show = plan_bar(1264, 0, sides, 24)
+        self.assertTrue(to_hide)
+        self.assertTrue(still_hidden(sides, to_hide, to_show))
+
+    def test_a_widget_we_already_hid_keeps_the_arrow_there(self):
+        sides = {"right": (1100, [("weather", 102, True)])}
+        self.assertTrue(still_hidden(sides, [], []))
+
+    def test_bringing_the_last_one_back_lets_the_arrow_go(self):
+        sides = {"right": (1100, [("weather", 102, True)])}
+        self.assertFalse(still_hidden(sides, [], ["weather"]))

@@ -76,6 +76,14 @@ def plan_bar(budget: int, fixed: int, sides: dict[str, tuple[int, list[Entry]]],
     return [], []
 
 
+def still_hidden(sides: dict[str, tuple[int, list[Entry]]], to_hide: list[str], to_show: list[str]) -> bool:
+    """Ramane ceva ascuns dupa ce facem ce am hotarat? Atunci sageata de la capat se vede."""
+    if to_hide:
+        return True
+    hidden = {name for _need, order in sides.values() for name, _w, hid in order if hid}
+    return bool(hidden - set(to_show))
+
+
 def next_tier(
     current: str,
     need: int,
@@ -310,6 +318,7 @@ class ResponsiveWidget(BaseWidget):
 
         overflow = self._overflow(root)
 
+        reserve = 0
         budget = width - self.config.margin
         sides: dict[str, tuple[int, list[Entry]]] = {}
         columns: dict[str, QWidget] = {}
@@ -322,13 +331,13 @@ class ResponsiveWidget(BaseWidget):
                 continue
             columns[key] = column
             need = self._hint(column)
-            # The arrow at the end of the bar appears exactly when we hide something, and it
-            # takes room itself — so it could cause the very hiding that made it appear, and
-            # then oscillate as things come back. We keep its room reserved either way, and
-            # leave it out of the measurement, so it never enters the arithmetic.
+            # Sageata de la capat exista doar cat timp ceva e ascuns, dar ocupa si ea loc. O
+            # scoatem din masuratoare si ii pastram locul abia dupa ce stim ca tot ascundem ceva
+            # (vezi mai jos): altfel locul ei lipseste mereu, iar pe bara ta exact el facea ca
+            # vremea sa nu mai incapa — adica sageata ajungea sa provoace ascunderea care o
+            # scotea la iveala.
             if overflow is not None and self._column(overflow, frame) is column:
                 reserve = self._hint(overflow)
-                budget -= reserve
                 if not overflow.isHidden():
                     need = max(0, need - max(reserve, overflow.width()))
             # flexible widgets (the window title) only count with their minimum
@@ -371,6 +380,10 @@ class ResponsiveWidget(BaseWidget):
             return  # masuram din nou cu spatiile noi inainte sa ascundem ceva
 
         to_hide, to_show = plan_bar(budget, fixed, sides, self.config.hysteresis)
+        if reserve and still_hidden(sides, to_hide, to_show):
+            # ramane ceva ascuns, deci sageata se vede: abia acum ii tinem locul
+            budget -= reserve
+            to_hide, to_show = plan_bar(budget, fixed, sides, self.config.hysteresis)
         for name in to_hide:
             visibility.request(found[name], visibility.SPACE, False)
         for name in to_show:
@@ -415,19 +428,22 @@ class ResponsiveWidget(BaseWidget):
     @staticmethod
     def _width_of(w: QWidget, hidden_by_us: bool) -> int:
         """
-        Cat loc ocupa widget-ul — aceeasi cifra la ascundere si la intoarcere.
+        Cat loc ocupa widget-ul, masurat la fel ca restul barei.
 
-        Ascuns, un widget nu mai are latime, iar sizeHint-ul lui iese alta cifra decat cat
-        ocupa de fapt pe bara. De aici palpairea din jurnal: scadeam 90 px cand il ascundeam
-        si socoteam 60 px cand verificam daca incape, deci incapea, il aduceam inapoi, nu
-        incapea, il ascundeam din nou — la fiecare secunda. Acum tinem minte latimea reala de
-        dinainte de ascundere si o folosim pe ea.
+        Cat cere o coloana se citeste din sizeHint. Daca pentru un widget luam in schimb
+        latimea lui de pe ecran, cele doua cifre nu mai sunt din aceeasi masura: in jurnalul
+        tau vremea se ascundea la 1250 px si se arata inapoi socotita la ~69 px, desi ocupa
+        102 — asa ca la fiecare cateva minute aparea si disparea. Acum totul vine din sizeHint,
+        iar pentru cat timp e ascuns tinem minte cat cerea cand se vedea (cea mai mare cifra
+        vazuta: unele widget-uri isi strang sizeHint-ul cand sunt ascunse).
         """
+        hint = ResponsiveWidget._hint(w)
+        remembered = getattr(w, LAST_WIDTH, 0)
         if not hidden_by_us:
-            real = max(1, w.width() or ResponsiveWidget._hint(w))
-            setattr(w, LAST_WIDTH, real)
-            return real
-        return getattr(w, LAST_WIDTH, 0) or ResponsiveWidget._hint(w)
+            width = max(1, hint)
+            setattr(w, LAST_WIDTH, width)
+            return width
+        return max(hint, remembered) or 1
 
     def _announce(self, found: dict[str, QWidget]) -> None:
         """
