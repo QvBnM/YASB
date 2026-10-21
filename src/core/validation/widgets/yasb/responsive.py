@@ -23,6 +23,11 @@ class ResponsiveConfig(CustomBaseModel):
     # extra room needed before something hidden comes back (no flickering)
     hysteresis: int = Field(default=24, ge=0, le=200)
     interval: int = Field(default=1000, ge=250, le=10000)
+    # Cat asteptam dupa pornire inainte sa ascundem ceva. In primele secunde widget-urile inca
+    # isi primesc datele si isi schimba latimea (placa video apare cand vine prima citire), deci
+    # orice hotarare luata atunci e luata pe cifre care se schimba sub noi. Masuram si alegem
+    # nivelul de la inceput; doar ascunsul asteapta.
+    settle: int = Field(default=4000, ge=0, le=20000)
 
     # Nivelurile pun pe bara clasa "tier-<nume>", folosita in styles.css pentru spatieri mai
     # stranse si text mai mic. Sub "full" se pune si clasa "compact", ca regulile vechi sa tina.

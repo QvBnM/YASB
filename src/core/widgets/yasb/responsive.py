@@ -13,6 +13,7 @@ the room left beside the clock, which styles.css uses for tighter spacing and sm
 from __future__ import annotations
 
 import logging
+import time
 
 from PyQt6.QtCore import QEvent, QObject, QTimer
 from PyQt6.QtWidgets import QApplication, QLabel, QWidget
@@ -74,6 +75,18 @@ def plan_bar(budget: int, fixed: int, sides: dict[str, tuple[int, list[Entry]]],
         if width + hysteresis <= slack:
             return [], [name]
     return [], []
+
+
+def settled(elapsed_ms: float, settle_ms: int) -> bool:
+    """
+    A trecut destul de la pornire cat sa merite sa ascundem ceva?
+
+    In jurnal se vedea ce iese daca nu astepti: la fiecare pornire, patru runde de
+    ascuns-aratat in sase secunde. Placa video si VRAM-ul se arata singure cand le vine prima
+    citire, la o secunda-doua dupa bara; noi le ascunsesem deja, ele reapareau, socoteala se
+    relua. Masuram de la inceput, dar ascundem dupa ce bara s-a asezat.
+    """
+    return elapsed_ms >= settle_ms
 
 
 def still_hidden(sides: dict[str, tuple[int, list[Entry]]], to_hide: list[str], to_show: list[str]) -> bool:
@@ -173,6 +186,7 @@ class ResponsiveWidget(BaseWidget):
         self.config = config
         make_invisible(self)
         self._tier: str | None = None
+        self._started = time.monotonic()
         self._need_at: dict[str, int] = {}  # cat cerea bara ultima data la fiecare nivel
         self._watched: QWidget | None = None
         self._clock_column: QWidget | None = None
@@ -378,6 +392,10 @@ class ResponsiveWidget(BaseWidget):
             self._set_tier(frame, wanted)
             self._announce(found)
             return  # masuram din nou cu spatiile noi inainte sa ascundem ceva
+
+        if not settled((time.monotonic() - self._started) * 1000, self.config.settle):
+            self._announce(found)
+            return  # masuram, dar lasam bara sa se aseze inainte sa ascundem ceva
 
         to_hide, to_show = plan_bar(budget, fixed, sides, self.config.hysteresis)
         if reserve and still_hidden(sides, to_hide, to_show):

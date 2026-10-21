@@ -6,7 +6,14 @@ import stubs
 
 stubs.install()
 
-from core.widgets.yasb.responsive import LAST_WIDTH, ResponsiveWidget, plan_bar, still_hidden  # noqa: E402
+from core.validation.widgets.yasb.responsive import ResponsiveConfig  # noqa: E402
+from core.widgets.yasb.responsive import (  # noqa: E402
+    LAST_WIDTH,
+    ResponsiveWidget,
+    plan_bar,
+    settled,
+    still_hidden,
+)
 from core.widgets.yasb.window_fix import (  # noqa: E402
     compute_fix,
     keeps_undoing,
@@ -387,3 +394,30 @@ class TestTheArrowDoesNotSqueezeThingsOut(unittest.TestCase):
     def test_bringing_the_last_one_back_lets_the_arrow_go(self):
         sides = {"right": (1100, [("weather", 102, True)])}
         self.assertFalse(still_hidden(sides, [], ["weather"]))
+
+
+class TestSettlingDown(unittest.TestCase):
+    """
+    La pornire, bara se măsoară, dar nu ascunde nimic în primele secunde.
+
+    În jurnal se vedea ce iese altfel: la fiecare pornire, patru runde de ascuns-arătat în
+    șase secunde. Placa video și VRAM-ul se arată singure când le vine prima citire, la o
+    secundă-două după bară; noi le ascunsesem deja, ele reapăreau, socoteala se relua.
+    """
+
+    SETTLE = ResponsiveConfig().settle
+
+    def test_right_after_start_we_only_measure(self):
+        self.assertFalse(settled(0, self.SETTLE))
+        self.assertFalse(settled(self.SETTLE - 1, self.SETTLE))
+
+    def test_then_we_may_hide(self):
+        self.assertTrue(settled(self.SETTLE, self.SETTLE))
+        self.assertTrue(settled(60_000, self.SETTLE))
+
+    def test_the_wait_is_long_enough_for_the_graphics_card(self):
+        """Placa video apare la o secundă-două după bară: așteptarea trebuie să treacă de ea."""
+        self.assertGreaterEqual(self.SETTLE, 3000)
+
+    def test_it_can_be_turned_off(self):
+        self.assertTrue(settled(0, 0))
