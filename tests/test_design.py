@@ -182,6 +182,49 @@ class TestPopups(unittest.TestCase):
         self.assertGreaterEqual(len(titles), 1)
 
 
+class TestNoContradictions(unittest.TestCase):
+    """
+    Două reguli care se bat între ele înseamnă că una e moartă.
+
+    Ceasul avea min-width: 150px într-un loc și min-width: 0 în altul, mai jos. Câștiga a
+    doua, deci prima nu făcea nimic — dar arăta ca și cum ceasul ar rezerva 150 px, și chiar
+    eu m-am luat după ea. Mai rău: dacă s-ar fi șters regula de jos, cei 150 px s-ar fi întors
+    pe tăcute, fără ca nimeni să schimbe ceva cu intenție.
+    """
+
+    # proprietăți unde o a doua declarație pe același selector e aproape sigur o scăpare
+    WATCHED = ("min-width", "max-width", "min-height", "max-height", "font-size", "border-radius")
+
+    def declarations(self) -> dict[tuple[str, str], list[str]]:
+        """
+        Numai regulile scrise pentru un singur selector.
+
+        O regulă de grup („iconița și eticheta au 11px”) urmată de una anume („iconița are
+        12px”) e felul normal de a scrie CSS, nu o contradicție. Problema e când același
+        selector, singur, primește aceeași proprietate de două ori, în două locuri diferite:
+        atunci una dintre ele nu face nimic, și nu se vede care.
+        """
+        found: dict[tuple[str, str], list[str]] = {}
+        for selectors, rule in re.findall(r"([^{}]+)\{([^{}]*)\}", BODY):
+            parts = [s.strip() for s in selectors.split(",") if s.strip()]
+            if len(parts) != 1:
+                continue
+            for prop in self.WATCHED:
+                for match in re.finditer(rf"(?:^|;)\s*{prop}\s*:\s*([^;]+)", rule):
+                    found.setdefault((parts[0], prop), []).append(match.group(1).strip())
+        return found
+
+    def test_no_property_is_declared_twice_with_different_values(self):
+        clashes = []
+        for (selector, prop), values in self.declarations().items():
+            if len(set(values)) > 1:
+                clashes.append(f"{selector} -> {prop}: {values}")
+        self.assertEqual(clashes, [], "reguli care se contrazic (una dintre ele e moartă):\n  " + "\n  ".join(clashes))
+
+    def test_the_check_actually_reads_the_file(self):
+        self.assertGreater(len(self.declarations()), 20)
+
+
 class TestIconFamily(unittest.TestCase):
     """
     Glifele scrise în config.yaml vin dintr-o singură familie.

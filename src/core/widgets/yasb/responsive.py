@@ -6,7 +6,8 @@ clock (the center stays exactly in the middle) and, when a side does not fit, hi
 side's least important widgets in the configured order; they come back as soon as there is
 room again. Only widgets it hid itself are ever shown again, so widgets that hide on their own
 (Bluetooth without a radio, the visualizer without music, modes) are left alone.
-Below `compact_below` the bar gets the class "compact" for tighter spacing in styles.css.
+The bar also gets a tier class (tier-full / tier-normal / tier-dense / tier-min) chosen from
+the room left beside the clock, which styles.css uses for tighter spacing and smaller text.
 """
 
 from __future__ import annotations
@@ -14,9 +15,9 @@ from __future__ import annotations
 import logging
 
 from PyQt6.QtCore import QEvent, QObject, QTimer
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 
-from core.validation.widgets.yasb.responsive import ResponsiveConfig
+from core.validation.widgets.yasb.responsive import TIERS, ResponsiveConfig, TierThresholds
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.mint_common import find_named, make_invisible, refresh_tree, set_class_token
@@ -52,6 +53,33 @@ def plan(need: int, avail: int, order: list[tuple[str, int, bool]], hysteresis: 
     return to_hide, to_show
 
 
+def tier_for(room: int, thresholds: TierThresholds, portrait: bool = False, portrait_max: str = "dense") -> str:
+    """
+    How tight the bar is, from the room left on one side of the clock.
+
+    Read from the room, not from the screen's resolution: that way a large monitor scaled to
+    150 % and a small laptop land on the same tier by themselves, with no per-screen setting
+    written anywhere. A rotated screen has a laptop's problem whatever its pixel count, so it
+    never goes above `portrait_max`.
+    """
+    if room >= thresholds.full:
+        tier = "full"
+    elif room >= thresholds.normal:
+        tier = "normal"
+    elif room >= thresholds.dense:
+        tier = "dense"
+    else:
+        tier = "min"
+    if portrait and TIERS.index(tier) > TIERS.index(portrait_max):
+        tier = portrait_max
+    return tier
+
+
+def at_or_below(tier: str, limit: str) -> bool:
+    """True when `tier` is as tight as `limit`, or tighter."""
+    return TIERS.index(tier) <= TIERS.index(limit)
+
+
 class ResponsiveWidget(BaseWidget):
     validation_schema = ResponsiveConfig
 
@@ -59,12 +87,36 @@ class ResponsiveWidget(BaseWidget):
         super().__init__(class_name="responsive")
         self.config = config
         make_invisible(self)
-        self._compact: bool | None = None
+        self._tier: str | None = None
         self._watched: QWidget | None = None
+        self._clock_column: QWidget | None = None
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(config.interval)
         QTimer.singleShot(600, self._tick)
+        self._watch_screens()
+
+    # ------------------------------------------------------------------ monitoare
+
+    def _watch_screens(self) -> None:
+        """
+        Cand conectezi sau scoti un monitor, tot ce stiam despre bara devine vechi.
+
+        Pana acum ramaneau referintele vechi la cadrul barei si la ceas, iar bara se stramba
+        pana o reporneai. Acum le aruncam si masuram din nou.
+        """
+        app = QApplication.instance()
+        if app is None:
+            return
+        for signal in (app.screenAdded, app.screenRemoved, app.primaryScreenChanged):
+            signal.connect(self._screens_changed)
+
+    def _screens_changed(self, *_args) -> None:
+        self._watched = None
+        self._tier = None
+        self._clock_column = None
+        QTimer.singleShot(0, self._tick)
+        QTimer.singleShot(400, self._tick)  # Qt aseaza barele din nou: mai masuram o data dupa
 
     # ------------------------------------------------------------------ helpers
 
@@ -104,6 +156,38 @@ class ResponsiveWidget(BaseWidget):
         except Exception:
             logging.exception("responsive: evaluation failed")
 
+    def _portrait(self, frame: QWidget) -> bool:
+        screen = frame.screen()
+        if screen is None:
+            return False
+        geometry = screen.geometry()
+        return geometry.height() > geometry.width()
+
+    def _apply_tier(self, frame: QWidget, room: int) -> None:
+        tier = tier_for(room, self.config.tiers, self._portrait(frame), self.config.portrait_max_tier)
+        if tier == self._tier:
+            return
+        self._tier = tier
+        set_class_token(frame, f"tier-{tier}", True, prefix="tier-")
+        # "compact" ramane pentru regulile scrise inainte de niveluri
+        set_class_token(frame, "compact", tier != "full")
+        self._apply_units(frame, tier)
+        refresh_tree(frame)
+        logging.info("responsive: side room %dpx -> tier %s", room, tier)
+
+    def _apply_units(self, frame: QWidget, tier: str) -> None:
+        """
+        Unitatile (%, grade) se scriu doar cand e loc.
+
+        Qt nu cunoaste "display: none", deci asta nu se poate face din stiluri. Etichetele de
+        unitate nu sunt widget-uri de bara, deci nu trec prin arbitru: nimeni altcineva nu le
+        atinge vizibilitatea.
+        """
+        show = not at_or_below(tier, self.config.hide_units_from)
+        for label in frame.findChildren(QLabel):
+            if "unit" in (label.property("class") or "").split() and label.isHidden() == show:
+                label.setVisible(show)
+
     def _apply(self) -> None:
         root = self.window()
         if root is None or root is self:
@@ -116,12 +200,6 @@ class ResponsiveWidget(BaseWidget):
         if width <= 0:
             return
 
-        compact = width < self.config.compact_below
-        if compact != self._compact:
-            self._compact = compact
-            set_class_token(frame, "compact", compact)
-            refresh_tree(frame)
-
         names = {n for n in self.config.hide_left + self.config.hide_right + list(self.config.flexible)}
         names |= {"clock"}
         found: dict[str, QWidget] = {}
@@ -132,6 +210,7 @@ class ResponsiveWidget(BaseWidget):
         center_col = self._column(clock, frame) if clock is not None else None
         center_w = self._hint(center_col) if center_col is not None else 0
         avail = (width - center_w) // 2 - self.config.margin
+        self._apply_tier(frame, avail)
 
         for side in (self.config.hide_left, self.config.hide_right):
             widgets = [(n, found[n]) for n in side if n in found]

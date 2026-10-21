@@ -279,8 +279,12 @@
 /* ---- Latimi stabile ----
    Numerele sunt completate cu spatii in config.yaml (ex. {..:>2.0f}) si fontul e monospace,
    deci fiecare valoare are mereu acelasi numar de caractere: nimic nu mai "danseaza"
-   si nu raman goluri mari. Aici doar ceasul si volumul mai au latime fixa. */
-.clock-widget .label  { min-width: 150px; -qproperty-alignment: 'AlignCenter'; }
+   si nu raman goluri mari. Doar volumul mai are latime fixa.
+
+   Ceasul avea aici min-width: 150px, dar regula era anulata mai jos (min-width: 0), de cand
+   ora si data au devenit doua widget-uri lipite. Doua reguli care se bat intre ele inseamna
+   ca una e moarta: daca se sterge cealalta, cei 150px se intorc pe tacute. Scoasa. */
+.clock-widget .label { -qproperty-alignment: 'AlignCenter'; }
 .audio-slider-widget .label { min-width: 34px; max-width: 34px; -qproperty-alignment: 'AlignLeft | AlignVCenter'; }
 
 /* CPU si temperatura lui stau lipite: "CPU 86% 84°C" */
@@ -961,8 +965,6 @@
     font-size: var(--fs-body);
     font-weight: 500;
 }
-.clock-widget .label { min-width: 0; }
-.clock-date .label { min-width: 0; }
 
 /* ---- Focus (pomodoro din YASB) ---- */
 .pomodoro-widget.focus .widget-container {
@@ -1156,8 +1158,19 @@
 .quick-launch-popup .results-empty-text { color: var(--sub); }
 .quick-launch-popup .preview { background-color: var(--card); border-left: 1px solid var(--line); }
 
-/* ================= Ecrane inguste (clasa "compact" pusa de widget-ul responsive) ================= */
-/* PC 2560px: nimic nu se schimba. Laptop 1920px la 125% (1536px pentru bara): spatiere mai stransa. */
+/* ================= Cat de stransa e bara =================
+   Widget-ul responsive masoara cat loc ramane pe o latura, langa ceas, si pune pe bara una
+   din clasele tier-full / tier-normal / tier-dense / tier-min. Nu se uita la rezolutie: asa,
+   un monitor mare scalat la 150% si un laptop mic ajung singure la acelasi nivel, fara nicio
+   setare scrisa pe undeva. Un ecran rotit nu urca niciodata peste "dense".
+
+   Clasa "compact" ramane pusa sub tier-full, pentru regulile scrise inainte de niveluri.
+
+   Ce NU se poate face aici: Qt nu cunoaste "display: none", deci ascunderea unitatilor si a
+   widget-urilor se face din cod (responsive.py), nu din stiluri.
+   ================================================================== */
+
+/* ---- normal: e loc, doar strangem putin ---- */
 .compact .widget .widget-container {
     padding: 0 3px;
 }
@@ -1169,4 +1182,52 @@
 }
 .compact .active-window-widget .widget-container {
     padding: 0 6px;
+}
+
+/* ---- dense: ecran mic sau monitor rotit. Textul coboara o treapta, spatiile se string. ---- */
+.tier-dense .widget .widget-container,
+.tier-min .widget .widget-container {
+    padding: 0 2px;
+}
+.tier-dense .sys-group .label,
+.tier-dense .traffic-widget .label,
+.tier-min .sys-group .label,
+.tier-min .traffic-widget .label {
+    font-size: var(--fs-small);
+}
+.tier-dense .media-lite-widget .title,
+.tier-min .media-lite-widget .title {
+    font-size: var(--fs-small);
+}
+.tier-dense .media-lite-widget .artist,
+.tier-min .media-lite-widget .artist {
+    font-size: var(--fs-micro);
+}
+.tier-dense .active-window-widget .label,
+.tier-min .active-window-widget .label {
+    font-size: var(--fs-small);
+}
+/* separatoarele taie bara in felii cand e deja stramta: raman doar cusaturile mari */
+.tier-dense .windows-desktops .widget-container,
+.tier-dense .net-group .container,
+.tier-dense .systray .widget-container,
+.tier-min .windows-desktops .widget-container,
+.tier-min .net-group .container,
+.tier-min .systray .widget-container {
+    border-left: none;
+}
+/* capsula de stari se strange, dar ramane capsula: ea raspunde la "e ceva in neregula?" */
+.tier-dense .status-group .container,
+.tier-min .status-group .container {
+    margin: var(--pill-m) 0 var(--pill-m) 3px;
+    padding: 0 2px;
+}
+.tier-dense .status-group .widget .widget-container,
+.tier-min .status-group .widget .widget-container {
+    padding: 0 4px;
+}
+
+/* ---- min: ecran foarte ingust. Ora ramane ancora, restul e deja ascuns din cod. ---- */
+.tier-min .clock-widget .label {
+    font-size: var(--fs-body);
 }

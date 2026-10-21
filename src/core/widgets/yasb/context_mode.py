@@ -110,7 +110,8 @@ class ContextModeWidget(BaseWidget):
     # ------------------------------------------------------------------ aplicare
 
     def _find_bar_frame(self, root: QWidget) -> QWidget:
-        if self._bar_frame is not None:
+        # referinta tinuta minte poate fi de la o bara disparuta (alt monitor, alta configurare)
+        if self._bar_frame is not None and self._bar_frame.parent() is not None:
             return self._bar_frame
         for w in [root, *root.findChildren(QWidget)]:
             if "yasb-bar" in (w.property("class") or "").split():

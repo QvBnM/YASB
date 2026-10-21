@@ -43,7 +43,11 @@ widgets:
       hide_left: ["viz", "git_branch", "volume_slider", "media", "notif"]
       hide_right: ["wallpaper", "vram", "latency", "gpu", "net_group", "weather", "ram", "tray"]
       flexible: { active_window: 110 }   # titlul ferestrei se micsoreaza singur pana la atat
-      compact_below: 1800
+      # Nivelul barei se alege din cat loc ramane pe o latura, langa ceas — nu din rezolutie.
+      # Asa, un monitor mare scalat la 150% si un laptop mic ajung singure la acelasi nivel.
+      tiers: { full: 820, normal: 560, dense: 360 }
+      portrait_max_tier: "dense"   # un ecran rotit are problema unui laptop, oricati pixeli ar avea
+      hide_units_from: "dense"     # sub nivelul asta nu se mai scriu %, grade
 
   # Invizibil: (1) Discord, qBittorrent si alte aplicatii cu bara de titlu proprie, maximizate,
   # ajungeau cu marginea de jos sub taskbar din cauza barei de sus: le potriveste in spatiul liber.
