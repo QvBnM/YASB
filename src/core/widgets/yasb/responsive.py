@@ -23,7 +23,7 @@ from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb import mint_health as health
 from core.widgets.yasb.bar_overflow import HIDDEN_EVENT
-from core.widgets.yasb.mint_common import find_named, make_invisible, refresh_tree, set_class_token
+from core.widgets.yasb.mint_common import all_bar_widgets, find_named, make_invisible, refresh_tree, set_class_token
 
 
 def plan(need: int, avail: int, order: list[tuple[str, int, bool]], hysteresis: int) -> tuple[list[str], list[str]]:
@@ -83,6 +83,28 @@ def at_or_below(tier: str, limit: str) -> bool:
     return TIERS.index(tier) <= TIERS.index(limit)
 
 
+UNIT_HIDDEN = "_mint_unit_hidden"
+
+
+def units_to_change(labels, show: bool) -> tuple[list, list]:
+    """
+    Which unit labels to hide / show, following the same rule as whole widgets: hide anything,
+    but only ever show back what we hid ourselves.
+
+    Without that rule this un-hid the *alt* labels too. A widget's alt label set is hidden by
+    YASB until you click it, so the bar ended up reading "CPU 17% MHz 55°C": the percent from
+    the normal label, and MHz from the alt one, side by side.
+    """
+    to_hide, to_show = [], []
+    for label in labels:
+        if not show:
+            if not label.isHidden():
+                to_hide.append(label)
+        elif label.isHidden() and getattr(label, UNIT_HIDDEN, False):
+            to_show.append(label)
+    return to_hide, to_show
+
+
 class ResponsiveWidget(BaseWidget):
     validation_schema = ResponsiveConfig
 
@@ -93,6 +115,7 @@ class ResponsiveWidget(BaseWidget):
         self._tier: str | None = None
         self._watched: QWidget | None = None
         self._clock_column: QWidget | None = None
+        self._overflow_widget: QWidget | None = None
         self._announced: str | None = None
         self._events = EventService()
         self._timer = QTimer(self)
@@ -169,6 +192,15 @@ class ResponsiveWidget(BaseWidget):
             return
         health.show_panel(self._frame(root))
 
+    def _overflow(self, root: QWidget):
+        """Sageata de la capatul barei, daca exista in bara asta."""
+        if self._overflow_widget is not None and self._overflow_widget.parent() is not None:
+            return self._overflow_widget
+        from core.widgets.yasb.bar_overflow import BarOverflowWidget
+
+        self._overflow_widget = next((w for w in all_bar_widgets(root) if isinstance(w, BarOverflowWidget)), None)
+        return self._overflow_widget
+
     def _portrait(self, frame: QWidget) -> bool:
         screen = frame.screen()
         if screen is None:
@@ -197,9 +229,14 @@ class ResponsiveWidget(BaseWidget):
         atinge vizibilitatea.
         """
         show = not at_or_below(tier, self.config.hide_units_from)
-        for label in frame.findChildren(QLabel):
-            if "unit" in (label.property("class") or "").split() and label.isHidden() == show:
-                label.setVisible(show)
+        units = [lb for lb in frame.findChildren(QLabel) if "unit" in (lb.property("class") or "").split()]
+        to_hide, to_show = units_to_change(units, show)
+        for label in to_hide:
+            setattr(label, UNIT_HIDDEN, True)
+            label.setVisible(False)
+        for label in to_show:
+            setattr(label, UNIT_HIDDEN, False)
+            label.setVisible(True)
 
     def _apply(self) -> None:
         root = self.window()
@@ -224,6 +261,7 @@ class ResponsiveWidget(BaseWidget):
         center_w = self._hint(center_col) if center_col is not None else 0
         avail = (width - center_w) // 2 - self.config.margin
         self._apply_tier(frame, avail)
+        overflow = self._overflow(root)
 
         for side in (self.config.hide_left, self.config.hide_right):
             widgets = [(n, found[n]) for n in side if n in found]
@@ -233,6 +271,16 @@ class ResponsiveWidget(BaseWidget):
             if column is None:
                 continue
             need = self._hint(column)
+            side_room = avail
+            # The arrow at the end of the bar appears exactly when we hide something, and it
+            # takes room itself — so it could cause the very hiding that made it appear, and
+            # then oscillate as things come back. We keep its room reserved either way, and
+            # leave it out of the measurement, so it never enters the arithmetic.
+            if overflow is not None and self._column(overflow, frame) is column:
+                reserve = self._hint(overflow)
+                side_room -= reserve
+                if not overflow.isHidden():
+                    need = max(0, need - max(reserve, overflow.width()))
             # flexible widgets (the window title) only count with their minimum
             for name, minimum in self.config.flexible.items():
                 fw = found.get(name)
@@ -250,14 +298,14 @@ class ResponsiveWidget(BaseWidget):
                 order.append(
                     (name, self._hint(w) if hidden_by_us else max(1, w.width() or self._hint(w)), hidden_by_us)
                 )
-            to_hide, to_show = plan(need, avail, order, self.config.hysteresis)
+            to_hide, to_show = plan(need, side_room, order, self.config.hysteresis)
             for name in to_hide:
                 visibility.request(found[name], visibility.SPACE, False)
             for name in to_show:
                 visibility.request(found[name], visibility.SPACE, True)
             if to_hide or to_show:
                 logging.info(
-                    "responsive: bar %dpx, side room %dpx -> hidden %s, shown %s", width, avail, to_hide, to_show
+                    "responsive: bar %dpx, side room %dpx -> hidden %s, shown %s", width, side_room, to_hide, to_show
                 )
         self._announce(found)
 

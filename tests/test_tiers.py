@@ -14,7 +14,7 @@ import stubs
 stubs.install()
 
 from core.validation.widgets.yasb.responsive import TIERS, TierThresholds  # noqa: E402
-from core.widgets.yasb.responsive import at_or_below, plan, tier_for  # noqa: E402
+from core.widgets.yasb.responsive import UNIT_HIDDEN, at_or_below, plan, tier_for, units_to_change  # noqa: E402
 
 TH = TierThresholds()
 
@@ -128,3 +128,81 @@ class TestTiersAndHiding(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakeUnit:
+    """O etichetă de unitate: „%", „°C", „MHz"."""
+
+    def __init__(self, text: str, hidden: bool = False):
+        self.text = text
+        self._hidden = hidden
+
+    def isHidden(self) -> bool:  # noqa: N802 - nume Qt
+        return self._hidden
+
+    def setVisible(self, visible: bool) -> None:  # noqa: N802 - nume Qt
+        self._hidden = not visible
+
+
+def apply_units(labels, show: bool) -> None:
+    """Ce face widget-ul responsive după ce a hotărât."""
+    to_hide, to_show = units_to_change(labels, show)
+    for label in to_hide:
+        setattr(label, UNIT_HIDDEN, True)
+        label.setVisible(False)
+    for label in to_show:
+        setattr(label, UNIT_HIDDEN, False)
+        label.setVisible(True)
+
+
+class TestUnits(unittest.TestCase):
+    """
+    Unitățile se ascund pe bare strâmte — dar numai ale etichetei care chiar se vede.
+
+    Fiecare widget are două seturi de etichete: cel normal și cel alternativ, pe care îl vezi
+    doar dacă dai click. YASB îl ține pe al doilea ascuns. Prima variantă a acestei reguli
+    arăta înapoi toate etichetele de unitate, inclusiv pe cele alternative — așa că bara a
+    ajuns să scrie „CPU 17% MHz 55°C": procentul de la eticheta normală și MHz de la cea
+    alternativă, unul lângă altul.
+
+    Regula e aceeași ca la widget-uri: ascundem orice, dar arătăm înapoi doar ce am ascuns noi.
+    """
+
+    def test_a_tight_bar_hides_the_units(self):
+        percent, degrees = FakeUnit("%"), FakeUnit("°C")
+        apply_units([percent, degrees], show=False)
+        self.assertTrue(percent.isHidden())
+        self.assertTrue(degrees.isHidden())
+
+    def test_they_come_back_when_there_is_room(self):
+        percent = FakeUnit("%")
+        apply_units([percent], show=False)
+        apply_units([percent], show=True)
+        self.assertFalse(percent.isHidden())
+
+    def test_the_alt_label_is_never_revealed(self):
+        """Cazul exact din bara ta: MHz și W apăreau lângă procente."""
+        percent = FakeUnit("%")
+        mhz = FakeUnit("MHz", hidden=True)  # eticheta alternativă, ascunsă de YASB
+        watts = FakeUnit("W", hidden=True)
+        apply_units([percent, mhz, watts], show=True)
+        self.assertFalse(percent.isHidden())
+        self.assertTrue(mhz.isHidden(), "MHz a apărut lângă procent")
+        self.assertTrue(watts.isHidden(), "W a apărut lângă grade")
+
+    def test_hiding_then_showing_does_not_reveal_the_alt_label_either(self):
+        percent = FakeUnit("%")
+        mhz = FakeUnit("MHz", hidden=True)
+        apply_units([percent, mhz], show=False)
+        apply_units([percent, mhz], show=True)
+        self.assertFalse(percent.isHidden())
+        self.assertTrue(mhz.isHidden())
+
+    def test_repeating_the_same_decision_changes_nothing(self):
+        percent = FakeUnit("%")
+        for _ in range(5):
+            apply_units([percent], show=True)
+        self.assertFalse(percent.isHidden())
+        for _ in range(5):
+            apply_units([percent], show=False)
+        self.assertTrue(percent.isHidden())
