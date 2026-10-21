@@ -21,6 +21,7 @@ from PyQt6.QtCore import QTimer
 
 from core.validation.widgets.yasb.window_fix import WindowFixConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb.mint_common import process_name
 
 Rect = tuple[int, int, int, int]  # left, top, right, bottom
 
@@ -100,23 +101,6 @@ def is_fullscreen_game(
     return covers_monitor(frame, monitor)
 
 
-def process_name_from_pid(pid: int) -> str:
-    """exe name of a process with plain Win32 (psutil is no longer installed with YASB)."""
-    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    k32.OpenProcess.restype = wintypes.HANDLE
-    handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
-    if not handle:
-        return ""
-    try:
-        buf = ctypes.create_unicode_buffer(1024)
-        size = wintypes.DWORD(len(buf))
-        if not k32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
-            return ""
-        return os.path.basename(buf.value)
-    finally:
-        k32.CloseHandle(handle)
-
-
 def reservation_missing(edge: str, bar_px: int, work: Rect, monitor: Rect, tolerance: int = 2) -> bool:
     """True when the monitor's work area no longer leaves room for a bar of bar_px on its edge."""
     if bar_px <= 0:
@@ -188,7 +172,7 @@ class WindowFixWidget(BaseWidget):
             return self._names[hwnd]
         pid = wintypes.DWORD()
         self._user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        name = process_name_from_pid(pid.value)
+        name = process_name(pid.value)
         if len(self._names) > 200:
             self._names.clear()
         self._names[hwnd] = name

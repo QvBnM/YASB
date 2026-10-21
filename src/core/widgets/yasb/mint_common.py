@@ -9,13 +9,55 @@ sa se poata incarca (si testa) si fara Windows.
 from __future__ import annotations
 
 import colorsys
+import functools
 import logging
 import os
 import re
+import threading
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 
 logger = logging.getLogger("mint")
+
+
+# --------------------------------------------------------------------------- munca o singura data
+
+
+def ttl_cache(ms: int):
+    """
+    Tine ultimul raspuns cateva sute de milisecunde.
+
+    Exista o bara pe fiecare monitor, iar widget-urile invizibile (moduri, praguri, window_fix)
+    traiesc in fiecare dintre ele. Fara asta, pe trei ecrane se citea de trei ori fereastra
+    activa, de trei ori lista proceselor, de trei ori microfonul — desi raspunsul e acelasi.
+    Cronometrele barelor bat aproape simultan, deci a doua si a treia bara iau raspunsul gata
+    facut. Nu e un sistem de abonamente: nimic de pornit, nimic de oprit, nimic de scurs.
+    """
+
+    def decorate(fn):
+        state: dict = {"at": -1e9, "args": None, "value": None}
+        lock = threading.Lock()
+
+        @functools.wraps(fn)
+        def wrapper(*args):
+            now = time.monotonic() * 1000
+            with lock:
+                if state["args"] == args and now - state["at"] < ms:
+                    return state["value"]
+            value = fn(*args)
+            with lock:
+                state["at"], state["args"], state["value"] = now, args, value
+            return value
+
+        def clear() -> None:
+            with lock:
+                state["at"], state["args"], state["value"] = -1e9, None, None
+
+        wrapper.cache_clear = clear  # type: ignore[attr-defined]
+        return wrapper
+
+    return decorate
 
 # --------------------------------------------------------------------------- paleta
 
@@ -235,12 +277,39 @@ class Foreground:
     fullscreen: bool = False
 
 
+def process_name(pid: int) -> str:
+    """
+    Numele exe-ului unui proces, cu Win32 curat.
+
+    Nu folosim psutil: setup-ul doar incerca sa-l instaleze, iar daca nu reusea mergea mai
+    departe cu un avertisment. Fara el, foreground().exe ramanea mereu gol, deci modurile
+    automate, branch-ul git si FPS-ul pe fereastra activa taceau, fara nicio eroare nicaieri.
+    """
+    if not pid or os.name != "nt":
+        return ""
+    import ctypes
+    from ctypes import wintypes
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(1024)
+        size = wintypes.DWORD(len(buf))
+        if not k32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+            return ""
+        return os.path.basename(buf.value)
+    finally:
+        k32.CloseHandle(handle)
+
+
+@ttl_cache(150)
 def foreground() -> Foreground:
     try:
         import ctypes
         from ctypes import wintypes
-
-        import psutil
 
         user32 = ctypes.windll.user32
         hwnd = user32.GetForegroundWindow()
@@ -252,7 +321,7 @@ def foreground() -> Foreground:
         buf = ctypes.create_unicode_buffer(length + 1)
         user32.GetWindowTextW(hwnd, buf, length + 1)
         try:
-            exe = psutil.Process(pid.value).name()
+            exe = process_name(pid.value)
         except Exception:
             exe = ""
         return Foreground(hwnd, pid.value, exe, buf.value, _is_fullscreen(hwnd))
@@ -285,11 +354,53 @@ def _is_fullscreen(hwnd: int) -> bool:
     return rect.left <= m.left and rect.top <= m.top and rect.right >= m.right and rect.bottom >= m.bottom
 
 
+@ttl_cache(4000)
 def running_process_names() -> set[str]:
-    try:
-        import psutil
+    """
+    Numele tuturor proceselor pornite, cu Win32 curat (Toolhelp32).
 
-        return {(p.info.get("name") or "").lower() for p in psutil.process_iter(["name"])}
+    Lista vine direct din instantaneu, fara sa deschidem fiecare proces in parte: pentru
+    "ruleaza jocul?" ne trebuie doar numele, nu drepturi asupra lui.
+    """
+    if os.name != "nt":
+        return set()
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class PROCESSENTRY32W(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.c_void_p),
+                ("th32ModuleID", wintypes.DWORD),
+                ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD),
+                ("pcPriClassBase", wintypes.LONG),
+                ("dwFlags", wintypes.DWORD),
+                ("szExeFile", wintypes.WCHAR * 260),
+            ]
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        snapshot = k32.CreateToolhelp32Snapshot(0x00000002, 0)  # TH32CS_SNAPPROCESS
+        if snapshot == wintypes.HANDLE(-1).value or not snapshot:
+            return set()
+        names: set[str] = set()
+        try:
+            entry = PROCESSENTRY32W()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            if not k32.Process32FirstW(snapshot, ctypes.byref(entry)):
+                return set()
+            while True:
+                if entry.szExeFile:
+                    names.add(entry.szExeFile.lower())
+                if not k32.Process32NextW(snapshot, ctypes.byref(entry)):
+                    break
+        finally:
+            k32.CloseHandle(snapshot)
+        return names
     except Exception:
         return set()
 
@@ -307,6 +418,7 @@ def _mic_app_name(key_name: str) -> str:
     return key_name.split("_")[0].split(".")[-1]
 
 
+@ttl_cache(500)
 def mic_users(ignore: Iterable[str] = ()) -> list[str]:
     """
     Aplicatiile care folosesc microfonul acum. Windows tine evidenta pentru iconita din tray:

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import os
 from ctypes import wintypes
 from dataclasses import dataclass
 
@@ -23,6 +24,7 @@ from core.utils.utilities import refresh_widget_style
 from core.validation.widgets.yasb.desktops_plus import DesktopsPlusConfig
 from core.widgets.services.windows_desktops.service import WindowsDesktopService
 from core.widgets.yasb import mint_visibility as visibility
+from core.widgets.yasb.mint_common import ttl_cache
 from core.widgets.yasb.windows_desktops import WorkspaceButton, WorkspaceWidget
 
 
@@ -43,6 +45,73 @@ def _enum_windows() -> list[int]:
 
     ctypes.windll.user32.EnumWindows(proc(cb), 0)
     return handles
+
+
+class _WindowScanner:
+    """
+    Ce aplicatie sta pe ce desktop, citit o singura data pentru toate barele.
+
+    Enumerarea ferestrelor plus un apel COM pentru fiecare fereastra in parte e partea scumpa,
+    iar raspunsul e acelasi pe orice monitor. Exista o bara pe fiecare ecran, deci fara asta
+    munca se facea de doua-trei ori la fiecare secunda si jumatate, degeaba.
+    """
+
+    def __init__(self) -> None:
+        self._windows: dict[int, object] = {}
+        self._vdm = None
+
+    def _desktop_id(self, hwnd: int) -> str | None:
+        try:
+            if self._vdm is None:
+                from core.utils.win32.bindings.ole32 import create_com_object
+                from core.utils.win32.bindings.shell32 import CLSID_VirtualDesktopManager, IVirtualDesktopManager
+                from core.utils.win32.constants import CLSCTX_INPROC_SERVER
+
+                self._vdm = create_com_object(CLSID_VirtualDesktopManager, IVirtualDesktopManager, CLSCTX_INPROC_SERVER)
+            guid = self._vdm.GetWindowDesktopId(hwnd)  # type: ignore[union-attr]
+            if bytes(guid) == b"\x00" * 16:
+                return None  # fereastra fara desktop (fixata pe toate sau fantoma)
+            return str(guid).lower()
+        except Exception:
+            return None
+
+    def scan(self, svc, ignored: tuple[str, ...]) -> tuple[list, dict[int, list[DesktopApp]]]:
+        from core.widgets.services.taskbar.application_window import ApplicationWindow
+
+        desktops = list(svc.get_desktops())
+        by_guid = {d.guid.lower(): d.number for d in desktops}
+        apps: dict[int, list[DesktopApp]] = {n: [] for n in by_guid.values()}
+        alive: set[int] = set()
+        own_pid = os.getpid()
+        for hwnd in _enum_windows():
+            win = self._windows.get(hwnd)
+            if win is None:
+                win = ApplicationWindow(hwnd)
+                self._windows[hwnd] = win
+            else:
+                win.update()  # type: ignore[attr-defined]
+            alive.add(hwnd)
+            if not win.is_taskbar_window():  # type: ignore[attr-defined]
+                continue
+            if win.process_pid == own_pid or (win.process_name or "").lower() in ignored:  # type: ignore[attr-defined]
+                continue
+            number = by_guid.get(self._desktop_id(hwnd) or "")
+            if number is None:
+                continue
+            apps[number].append(DesktopApp(win.process_name or "", win.process_path or "", win.title))  # type: ignore[attr-defined]
+        for gone in set(self._windows) - alive:
+            self._windows.pop(gone, None)
+        return desktops, apps
+
+
+_SCANNER = _WindowScanner()
+
+
+# Barele bat aproape simultan: a doua si a treia iau raspunsul gata facut, iar la urmatorul
+# tick (o secunda si jumatate mai tarziu) se citeste din nou.
+@ttl_cache(400)
+def scan_desktops(svc, ignored: tuple[str, ...]) -> tuple[list, dict[int, list[DesktopApp]]]:
+    return _SCANNER.scan(svc, ignored)
 
 
 class _HoverPopup(QWidget):
@@ -89,11 +158,9 @@ class DesktopsPlusWidget(WorkspaceWidget):
         super().__init__(config)
         self.config: DesktopsPlusConfig = config
         self._apps_by_desktop: dict[int, list[DesktopApp]] = {}
-        self._windows: dict[int, object] = {}
-        self._vdm = None
         self._icons: dict[str, QPixmap] = {}
         self._icon_provider = QFileIconProvider()
-        self._ignored = {p.lower() for p in config.ignore_processes}
+        self._ignored_key = tuple(sorted(p.lower() for p in config.ignore_processes))
         self._popup: _HoverPopup | None = None
 
         self.register_callback("switch_desktop", self._cb_switch_desktop)
@@ -116,50 +183,11 @@ class DesktopsPlusWidget(WorkspaceWidget):
 
     # ------------------------------------------------------------------ ferestre pe desktop-uri
 
-    def _desktop_id(self, hwnd: int) -> str | None:
-        try:
-            if self._vdm is None:
-                from core.utils.win32.bindings.ole32 import create_com_object
-                from core.utils.win32.bindings.shell32 import CLSID_VirtualDesktopManager, IVirtualDesktopManager
-                from core.utils.win32.constants import CLSCTX_INPROC_SERVER
-
-                self._vdm = create_com_object(CLSID_VirtualDesktopManager, IVirtualDesktopManager, CLSCTX_INPROC_SERVER)
-            guid = self._vdm.GetWindowDesktopId(hwnd)  # type: ignore[union-attr]
-            if bytes(guid) == b"\x00" * 16:
-                return None  # fereastra fara desktop (fixata pe toate sau fantoma)
-            return str(guid).lower()
-        except Exception:
-            return None
-
     def _scan(self) -> None:
         try:
-            from core.widgets.services.taskbar.application_window import ApplicationWindow
-
-            desktops = self._svc.get_desktops()
+            desktops, apps = scan_desktops(self._svc, self._ignored_key)
             if self.config.hide_when_single:
                 visibility.request(self, visibility.SELF, len(desktops) > 1)
-            by_guid = {d.guid.lower(): d.number for d in desktops}
-            apps: dict[int, list[DesktopApp]] = {n: [] for n in by_guid.values()}
-            alive: set[int] = set()
-            own_pid = __import__("os").getpid()
-            for hwnd in _enum_windows():
-                win = self._windows.get(hwnd)
-                if win is None:
-                    win = ApplicationWindow(hwnd)
-                    self._windows[hwnd] = win
-                else:
-                    win.update()  # type: ignore[attr-defined]
-                alive.add(hwnd)
-                if not win.is_taskbar_window():  # type: ignore[attr-defined]
-                    continue
-                if win.process_pid == own_pid or (win.process_name or "").lower() in self._ignored:  # type: ignore[attr-defined]
-                    continue
-                number = by_guid.get(self._desktop_id(hwnd) or "")
-                if number is None:
-                    continue
-                apps[number].append(DesktopApp(win.process_name or "", win.process_path or "", win.title))  # type: ignore[attr-defined]
-            for gone in set(self._windows) - alive:
-                self._windows.pop(gone, None)
             changed = {n: [a.process for a in v] for n, v in apps.items()} != {
                 n: [a.process for a in v] for n, v in self._apps_by_desktop.items()
             }

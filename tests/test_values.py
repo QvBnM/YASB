@@ -12,11 +12,16 @@ from core.widgets.yasb.mint_common import (  # noqa: E402
     FALLBACK_PALETTE,
     contrast,
     ensure_contrast,
+    foreground,
     luminance,
+    mic_users,
     mix,
     parse_palette,
+    process_name,
     ro_day_month,
     ro_days,
+    running_process_names,
+    ttl_cache,
 )
 from core.widgets.yasb.mint_thresholds import evaluate, with_level  # noqa: E402
 from core.widgets.yasb.ui_polish import format_range, merge_holidays  # noqa: E402
@@ -123,6 +128,99 @@ class TestPaletteFile(unittest.TestCase):
     def test_a_broken_file_does_not_crash(self):
         p = parse_palette("nu e css deloc {{{")
         self.assertEqual(p, dict(FALLBACK_PALETTE))
+
+
+class TestSharedWork(unittest.TestCase):
+    """
+    Munca se face o singura data, nu o data pe monitor.
+
+    Exista cate o bara pe fiecare ecran, iar widget-urile invizibile traiesc in fiecare dintre
+    ele. Pe trei monitoare se citea de trei ori fereastra activa, de trei ori lista proceselor,
+    de trei ori microfonul — desi raspunsul e identic.
+    """
+
+    def test_three_bars_ask_once(self):
+        calls = []
+
+        @ttl_cache(10_000)
+        def sample():
+            calls.append(1)
+            return "fereastra activa"
+
+        results = [sample() for _ in range(3)]  # trei bare, acelasi moment
+        self.assertEqual(results, ["fereastra activa"] * 3)
+        self.assertEqual(len(calls), 1, "munca s-a facut o data pentru fiecare monitor")
+
+    def test_an_expired_answer_is_read_again(self):
+        calls = []
+
+        @ttl_cache(0)
+        def sample():
+            calls.append(1)
+            return len(calls)
+
+        sample()
+        sample()
+        self.assertEqual(len(calls), 2, "dupa ce a expirat, trebuie citit din nou")
+
+    def test_different_arguments_are_not_mixed_up(self):
+        seen = []
+
+        @ttl_cache(10_000)
+        def sample(which):
+            seen.append(which)
+            return which.upper()
+
+        self.assertEqual(sample("microfon"), "MICROFON")
+        self.assertEqual(sample("retea"), "RETEA")
+        self.assertEqual(seen, ["microfon", "retea"])
+
+    def test_the_answer_can_be_thrown_away(self):
+        calls = []
+
+        @ttl_cache(10_000)
+        def sample():
+            calls.append(1)
+            return len(calls)
+
+        sample()
+        sample.cache_clear()
+        sample()
+        self.assertEqual(len(calls), 2)
+
+    def test_the_shared_readers_are_actually_shared(self):
+        """Daca cineva scoate memoria de pe ele, pe mai multe monitoare munca se dubleaza iar."""
+        for reader in (foreground, running_process_names, mic_users):
+            self.assertTrue(
+                hasattr(reader, "cache_clear"),
+                f"{reader.__name__} nu mai tine minte raspunsul: munca se face iar pe fiecare bara",
+            )
+
+
+class TestWithoutWindows(unittest.TestCase):
+    """
+    Citirea proceselor se face acum direct din Windows, fara psutil.
+
+    Setup-ul doar incerca sa instaleze psutil si mergea mai departe cu un avertisment daca nu
+    reusea. Fara el, numele ferestrei active ramanea mereu gol, deci modurile automate, branch-ul
+    git si FPS-ul taceau fara nicio eroare. Aici verificam doar ca, in lipsa Windows-ului,
+    raspund gol in loc sa crape — partea care chiar citeste procese se vede pe Windows.
+    """
+
+    def test_process_name_answers_empty(self):
+        self.assertEqual(process_name(1234), "")
+
+    def test_process_name_of_nothing(self):
+        self.assertEqual(process_name(0), "")
+
+    def test_the_process_list_is_empty_not_a_crash(self):
+        self.assertEqual(running_process_names(), set())
+
+    def test_the_foreground_window_is_simply_unknown(self):
+        fg = foreground()
+        self.assertEqual(fg.exe, "")
+        self.assertEqual(fg.hwnd, 0)
+        self.assertFalse(fg.fullscreen)
 
 
 class TestRomanian(unittest.TestCase):

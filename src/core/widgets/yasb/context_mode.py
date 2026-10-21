@@ -36,9 +36,6 @@ from core.widgets.yasb.mint_common import (
     set_class_token,
 )
 
-RUNNING_CACHE_SECONDS = 4.0
-
-
 class ContextModeWidget(BaseWidget):
     validation_schema = ContextModeConfig
     mode_changed = pyqtSignal(str)
@@ -52,7 +49,6 @@ class ContextModeWidget(BaseWidget):
         self._last_true: dict[str, float] = {}
         self._last_fg = Foreground()
         self._running: set[str] = set()
-        self._running_at = 0.0
         self._bar_frame: QWidget | None = None
         self._need_running = any(r.match == "running" and r.processes for r in config.modes)
         self._need_mic = any(r.mic_in_use for r in config.modes)
@@ -93,9 +89,9 @@ class ContextModeWidget(BaseWidget):
                 self._last_fg = fg
 
             now = time.monotonic()
-            if self._need_running and now - self._running_at > RUNNING_CACHE_SECONDS:
-                self._running = running_process_names()
-                self._running_at = now
+            # amandoua isi tin singure ultimul raspuns cateva momente (vezi ttl_cache),
+            # deci pe mai multe monitoare munca se face o singura data
+            self._running = running_process_names() if self._need_running else set()
             mic = mic_users(self.config.mic_ignore) if self._need_mic else []
 
             chosen: ModeRule | None = None

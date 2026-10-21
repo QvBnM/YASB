@@ -26,6 +26,30 @@ from core.widgets.yasb.mint_common import PaletteWatcher, make_invisible, ro_day
 _PATCHED_CALENDAR = False
 _CAL_COLORS: dict[str, str] = {}
 
+# Filtrul de evenimente se pune pe toata aplicatia, deci vede fiecare eveniment al fiecarui
+# obiect. Exista cate un ui_polish in fiecare bara, adica unul pe monitor: pe trei ecrane,
+# fiecare miscare de mouse trecea prin trei functii Python degeaba. Acum il tine unul singur,
+# iar daca bara lui se inchide (reincarcarea configurarii), il preia altul.
+_FILTER_INSTANCES: list = []
+_FILTER_OWNER = None
+
+
+def _claim_event_filter() -> None:
+    from core.utils.qobject import is_valid_qobject
+
+    global _FILTER_OWNER
+    app = QApplication.instance()
+    if app is None:
+        return
+    if _FILTER_OWNER is not None and is_valid_qobject(_FILTER_OWNER):
+        return
+    _FILTER_INSTANCES[:] = [w for w in _FILTER_INSTANCES if is_valid_qobject(w)]
+    _FILTER_OWNER = None
+    for widget in _FILTER_INSTANCES:
+        app.installEventFilter(widget)
+        _FILTER_OWNER = widget
+        return
+
 
 # --------------------------------------------------------------------------- sarbatori
 
@@ -117,9 +141,10 @@ class UiPolishWidget(BaseWidget):
         self._on_palette(self._palette.colors)
         if config.calendar.enabled:
             _patch_calendar()
-        app = QApplication.instance()
-        if app is not None:
-            app.installEventFilter(self)
+        if self not in _FILTER_INSTANCES:
+            _FILTER_INSTANCES.append(self)
+        _claim_event_filter()
+        self.destroyed.connect(lambda *_: _claim_event_filter())
 
     def _on_palette(self, colors: dict[str, str]) -> None:
         c = self.config.calendar

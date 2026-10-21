@@ -165,9 +165,7 @@ if ($pipExit -ne 0) { throw "pip install a esuat. Ruleaza manual: cd $YasbPath; 
 Ok "Dependente instalate"
 
 Step "Instalez pywal (culori din wallpaper)"
-# psutil: YASB 2.0.8+ no longer installs it, but our widgets (modes, window_fix, git, desktops) use it
-& py -3.14 -m pip install psutil --quiet
-if ($LASTEXITCODE -ne 0) { Warn "psutil nu s-a instalat: modurile automate si detectarea jocurilor merg mai slab." } else { Ok "psutil instalat" }
+# psutil nu mai e nevoie: widget-urile citesc procesele direct din Windows (mint_common.py)
 & py -3.14 -m pip install pywal16 colorthief speedtest-cli --quiet
 if ($LASTEXITCODE -ne 0) {
     Warn "pywal nu s-a instalat; recolorarea merge oricum, cu extractorul inclus (Pillow)."
