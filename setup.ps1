@@ -7,6 +7,10 @@
 
 param(
     [string]$YasbPath = "$HOME\yasb",
+    # Versiunea YASB de folosit. Implicit se ia cea fixata in tools\yasb-pin.txt, adica aceea
+    # pe care bara a mers ultima data. Dai -YasbRef main (sau un commit) ca sa treci conștient
+    # pe alta; daca verificarea trece, noua versiune devine cea fixata.
+    [string]$YasbRef = "",
     [switch]$NoAutostart,
     [switch]$NoHWiNFO
 )
@@ -93,19 +97,53 @@ if ($running) {
     Ok "YASB nu rula"
 }
 
-# ---------- 4. YASB din sursa ----------
+# ---------- 4. YASB din sursa, pe versiunea verificata ----------
+# Widget-urile noastre se sprijina pe lucruri din interiorul YASB. Daca instalarea ar lua mereu
+# ultima versiune de pe main, o schimbare la ei ar putea opri bara intr-o dimineata, fara ca tu
+# sa fi atins nimic. De aceea ramanem pe commit-ul pe care bara chiar a mers.
+$pinFile = Join-Path $here "tools\yasb-pin.txt"
+$pin = ""
+if (Test-Path $pinFile) {
+    # un fisier care are doar comentarii lasa $pinLine gol: nu chemam .Trim() pe nimic
+    $pinLine = Get-Content $pinFile | Where-Object { $_.Trim() -and -not $_.Trim().StartsWith("#") } | Select-Object -First 1
+    if ($pinLine) { $pin = $pinLine.Trim() }
+}
+$wantRef = if ($YasbRef) { $YasbRef } elseif ($pin -and $pin -ne "unpinned") { $pin } else { "" }
+
 Step "Descarc YASB"
 if (Test-Path "$YasbPath\src\main.py") {
     Push-Location $YasbPath
-    # our patches (clock centering, launcher commands) are re-applied below; restore the originals so the pull can run
+    # peticele noastre (centrarea ceasului, comenzile din lansator) se pun din nou mai jos;
+    # intai aducem fisierele la original, ca sa se poata schimba versiunea
     git checkout -- src/main.py src/core/bar.py src/core/widgets/services/quick_launch/providers/__init__.py src/core/widgets/services/quick_launch/service.py src/core/validation/widgets/yasb/quick_launch.py 2>$null
-    git pull --ff-only
+    git fetch --tags origin
     Pop-Location
-    Ok "YASB actualizat in $YasbPath"
 } else {
     git clone https://github.com/amnweb/yasb.git $YasbPath
     if ($LASTEXITCODE -ne 0) { throw "git clone a esuat." }
     Ok "YASB descarcat in $YasbPath"
+}
+
+Push-Location $YasbPath
+if ($wantRef) {
+    git checkout --quiet $wantRef
+    if ($LASTEXITCODE -ne 0) { Pop-Location; throw "Nu pot trece YASB pe '$wantRef'. Verifica numele versiunii." }
+    Ok "YASB pe versiunea verificata ($($wantRef.Substring(0, [Math]::Min(10, $wantRef.Length))))"
+} else {
+    # fara o versiune fixata luam ramura principala a lor, oricum s-ar numi
+    $branch = (git symbolic-ref --quiet --short refs/remotes/origin/HEAD) -replace '^origin/', ''
+    if (-not $branch) { $branch = "main" }
+    git checkout --quiet $branch
+    if ($LASTEXITCODE -ne 0) { Pop-Location; throw "Nu pot trece YASB pe ramura '$branch'." }
+    git pull --ff-only
+    Warn "Nicio versiune fixata inca: iau ultima de pe $branch. Daca verificarea trece, ramane fixata pe ea."
+}
+$yasbCommit = (git rev-parse HEAD)
+Pop-Location
+if ($yasbCommit) {
+    Ok "YASB: commit $($yasbCommit.Trim().Substring(0,10))"
+} else {
+    Warn "Nu pot citi versiunea YASB (copia nu pare un depozit git)."
 }
 
 # ---------- 5. Widget-urile noastre (tot ce e in src/ + comenzile barei in lansator) ----------
@@ -182,6 +220,17 @@ if ($LASTEXITCODE -eq 0) {
     Ok "Paleta generata (vezi $configDir\palette.log)"
 } else {
     Warn "Nu am putut genera paleta acum; ramane cea implicita."
+}
+
+# ---------- 7d. Controlul de dinainte ----------
+# Ultima oprire inainte ca bara sa porneasca: versiunea YASB, fiecare lucru din interiorul lor pe
+# care ne sprijinim, fiecare widget numit intr-o regula, fiecare culoare folosita in stiluri.
+# Daca ceva nu se potriveste, instalarea se opreste aici si scrie ce anume, in loc sa pornesti o
+# bara care pica. Daca trece, versiunea YASB de acum devine cea fixata.
+Step "Verific totul inainte de pornire"
+& py -3.14 (Join-Path $here "tools\mint_doctor.py") --yasb $YasbPath --config $configDir --record-pin
+if ($LASTEXITCODE -ne 0) {
+    throw "Verificarea a gasit probleme (vezi lista de mai sus). Bara nu a fost pornita."
 }
 
 # ---------- 7c. HWiNFO64: temperatura CPU pentru bara ----------

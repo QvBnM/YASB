@@ -1,112 +1,90 @@
 """
-Verificările care prind greșelile tăcute din config.yaml și styles.css.
+Verificările care prind greșelile tăcute din config.yaml și styles.css, plus contractul cu YASB.
 
 Azi, un nume de widget scris greșit într-o regulă (moduri, praguri, responsive) nu face nimic
 și nu scrie nimic în jurnal: regula pur și simplu nu se aplică niciodată. La fel, o culoare
 folosită în styles.css dar nescrisă în paletă rămâne nerezolvată. Aici amândouă cad ca teste.
+
+Logica verificărilor stă în tools/mint_check.py și e aceeași pe care o rulează doctorul
+înainte de instalare, ca să nu existe două adevăruri despre ce înseamnă „e în regulă”.
 """
 
 import importlib
-import re
+import sys
+import textwrap
 import unittest
 from pathlib import Path
-
-import yaml
 
 import stubs
 
 stubs.install()
 
 REPO = Path(__file__).resolve().parent.parent
-CONFIG = REPO / "config" / "config.yaml"
-STYLES = REPO / "config" / "styles.css"
-PALETTE = REPO / "config" / "palette.css"
+sys.path.insert(0, str(REPO / "tools"))
 
-
-def load_config() -> dict:
-    return yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
-
+from mint_check import (  # noqa: E402
+    CONFIG_DIR,
+    CONTRACT_ATTRIBUTES,
+    contract_problems,
+    css_used_names,
+    hardcoded_colours,
+    load_config,
+    missing_references,
+    placed_widgets,
+    referenced_widget_names,
+    scan_yasb_imports,
+    unresolved_css_vars,
+    widgets_placed_twice,
+)
 
 CFG = load_config()
 WIDGETS: dict = CFG.get("widgets", {})
 NAMES = set(WIDGETS)
+STYLES = (CONFIG_DIR / "styles.css").read_text(encoding="utf-8")
+PALETTE = (CONFIG_DIR / "palette.css").read_text(encoding="utf-8")
 
 
 def options(name: str) -> dict:
-    return WIDGETS.get(name, {}).get("options", {}) or {}
-
-
-def referenced_names() -> dict[str, list[str]]:
-    """Fiecare loc din config care numește alte widget-uri -> numele numite."""
-    out: dict[str, list[str]] = {}
-
-    for bar_name, bar in (CFG.get("bars") or {}).items():
-        for column, items in (bar.get("widgets") or {}).items():
-            out[f"bars.{bar_name}.{column}"] = list(items or [])
-
-    for name, widget in WIDGETS.items():
-        kind = widget.get("type", "")
-        opts = options(name)
-        if kind.endswith("grouper.GrouperWidget"):
-            out[f"{name}.widgets"] = list(opts.get("widgets") or [])
-        if kind.endswith("context_mode.ContextModeWidget"):
-            out[f"{name}.hidden_by_default"] = list(opts.get("hidden_by_default") or [])
-            for mode in opts.get("modes") or []:
-                label = mode.get("name", "?")
-                out[f"{name}.{label}.hide"] = list(mode.get("hide") or [])
-                out[f"{name}.{label}.show"] = list(mode.get("show") or [])
-        if kind.endswith("responsive.ResponsiveWidget"):
-            out[f"{name}.hide_left"] = list(opts.get("hide_left") or [])
-            out[f"{name}.hide_right"] = list(opts.get("hide_right") or [])
-            out[f"{name}.flexible"] = list((opts.get("flexible") or {}).keys())
-        if kind.endswith("mint_thresholds.MintThresholdsWidget"):
-            out[f"{name}.rules"] = [r["widget"] for r in opts.get("rules") or [] if "widget" in r]
-        if kind.endswith("cover_accent.CoverAccentWidget"):
-            out[f"{name}.targets"] = list(opts.get("targets") or [])
-        if kind.endswith("bar_notifications.BarNotificationsWidget"):
-            replace = opts.get("replace")
-            if replace:
-                out[f"{name}.replace"] = [replace]
-        if kind.endswith("quick_launch.QuickLaunchWidget"):
-            commands = ((opts.get("providers") or {}).get("bar_commands") or {}).get("commands") or []
-            out[f"{name}.bar_commands"] = [c["widget"] for c in commands if c.get("widget")]
-    return out
+    return (WIDGETS.get(name, {}) or {}).get("options", {}) or {}
 
 
 class TestReferences(unittest.TestCase):
     """Orice widget numit într-o regulă trebuie să existe cu adevărat."""
 
     def test_every_referenced_widget_exists(self):
-        missing = []
-        for where, names in referenced_names().items():
-            for name in names:
-                if name not in NAMES:
-                    missing.append(f"{where} -> '{name}'")
+        missing = missing_references(CFG)
         self.assertEqual(missing, [], "widget-uri numite dar inexistente:\n  " + "\n  ".join(missing))
 
+    def test_the_scan_actually_looks_everywhere(self):
+        """Dacă cineva adaugă o regulă nouă și uită să o treacă în scanare, testul de sus devine gol."""
+        places = referenced_widget_names(CFG)
+        for expected in (
+            "bars.primary-bar.left",
+            "media_group.widgets",
+            "modes.hidden_by_default",
+            "responsive.hide_left",
+            "thresholds.rules",
+            "cover_accent.targets",
+            "notif.replace",
+            "launcher.bar_commands",
+        ):
+            self.assertIn(expected, places, f"scanarea nu se mai uită la {expected}")
+        self.assertGreater(sum(len(v) for v in places.values()), 40)
+
+    def test_a_typo_is_caught(self):
+        broken = {
+            "widgets": {"cpu": {"type": "yasb.cpu.CpuWidget"}},
+            "bars": {"b": {"widgets": {"right": ["cpuu"]}}},
+        }
+        self.assertEqual(missing_references(broken), ["bars.b.right -> 'cpuu'"])
+
     def test_every_widget_is_actually_placed_in_a_bar(self):
-        """Un widget definit dar nepus în nicio bară nu rulează niciodată."""
-        placed: set[str] = set()
-        for bar in (CFG.get("bars") or {}).values():
-            for items in (bar.get("widgets") or {}).values():
-                placed.update(items or [])
-        for name, widget in WIDGETS.items():
-            if widget.get("type", "").endswith("grouper.GrouperWidget"):
-                placed.update(options(name).get("widgets") or [])
-        unused = sorted(NAMES - placed)
+        unused = sorted(NAMES - placed_widgets(CFG))
         # speedtest e documentat ca nefolosit (testul e în popup-ul de rețea)
         self.assertEqual(unused, ["speedtest"], f"widget-uri definite dar nepuse nicăieri: {unused}")
 
     def test_no_widget_is_placed_twice(self):
-        seen: dict[str, str] = {}
-        twice = []
-        for bar_name, bar in (CFG.get("bars") or {}).items():
-            for column, items in (bar.get("widgets") or {}).items():
-                for name in items or []:
-                    where = f"bars.{bar_name}.{column}"
-                    if name in seen:
-                        twice.append(f"'{name}' ({seen[name]} și {where})")
-                    seen[name] = where
+        twice = widgets_placed_twice(CFG)
         self.assertEqual(twice, [], f"widget-uri puse de două ori: {twice}")
 
 
@@ -171,8 +149,7 @@ class TestSchemas(unittest.TestCase):
                 continue
             required = sorted(f for f, info in schema.model_fields.items() if info.is_required())
             if required:
-                written = set(options(name))
-                absent = [f for f in required if f not in written]
+                absent = [f for f in required if f not in set(options(name))]
                 if absent:
                     failures.append(f"{name} ({kind}): opțiuni obligatorii lipsă din config.yaml: {absent}")
                 continue
@@ -186,38 +163,127 @@ class TestSchemas(unittest.TestCase):
 class TestStyles(unittest.TestCase):
     """Fiecare culoare folosită în styles.css trebuie să existe în paletă."""
 
-    USED = re.compile(r"var\(\s*--([\w-]+)\s*\)")
-    DEFINED = re.compile(r"--([\w-]+)\s*:")
-
-    def defined_names(self) -> set[str]:
-        names = set(self.DEFINED.findall(PALETTE.read_text(encoding="utf-8")))
-        # styles.css își definește singur rezerva pentru --warn, înaintea importului
-        head = STYLES.read_text(encoding="utf-8").split("@import", 1)[0]
-        names |= set(self.DEFINED.findall(head))
-        # generatorul scrie și varianta "r, g, b" pentru fiecare culoare
-        names |= {f"{n}-rgb" for n in names}
-        return names
-
-    def used_names(self) -> set[str]:
-        return set(self.USED.findall(STYLES.read_text(encoding="utf-8")))
-
     def test_no_unresolved_colour(self):
-        missing = sorted(self.used_names() - self.defined_names())
+        missing = unresolved_css_vars(STYLES, PALETTE)
         self.assertEqual(missing, [], f"culori folosite dar nedefinite în paletă: {missing}")
 
     def test_no_hardcoded_colour_in_the_bar(self):
         """Culorile vin din wallpaper: un hex scris direct nu s-ar mai schimba cu paleta."""
-        body = STYLES.read_text(encoding="utf-8").split("@import", 1)[1]
-        body = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
-        hexes = re.findall(r"#[0-9a-fA-F]{3,8}\b", body)
+        hexes = hardcoded_colours(STYLES)
         self.assertEqual(hexes, [], f"culori scrise direct în styles.css: {hexes}")
+
+    def test_a_missing_colour_is_caught(self):
+        self.assertEqual(
+            unresolved_css_vars(".x { color: var(--inexistent); }", ":root { --bar: #000000; }"),
+            ["inexistent"],
+        )
+
+    def test_the_rgb_variants_count_as_defined(self):
+        self.assertEqual(
+            unresolved_css_vars(".x { background: rgba(var(--bar-rgb), .9); }", ":root { --bar: #000000; }"),
+            [],
+        )
 
     def test_palette_defines_everything_the_fallback_knows(self):
         from core.widgets.yasb.mint_common import FALLBACK_PALETTE
+        from mint_check import css_defined_names
 
-        defined = self.defined_names()
-        missing = sorted(set(FALLBACK_PALETTE) - defined)
+        missing = sorted(set(FALLBACK_PALETTE) - css_defined_names(STYLES, PALETTE))
         self.assertEqual(missing, [], f"paleta de exemplu nu are: {missing}")
+
+    def test_the_bar_really_uses_colours(self):
+        self.assertGreater(len(css_used_names(STYLES)), 10)
+
+
+class TestContract(unittest.TestCase):
+    """
+    Lista lucrurilor din YASB pe care ne sprijinim, verificată pe un YASB de carton.
+
+    Testul nu are YASB adevărat la îndemână, deci construiește un arbore mic de fișiere și
+    verifică faptul că citirea chiar găsește ce lipsește — adică exact ce va face doctorul pe
+    calculatorul tău, pe codul adevărat.
+    """
+
+    def _fake_yasb(self, body: str, module: str = "core/widgets/yasb/windows_desktops.py") -> Path:
+        import tempfile
+
+        root = Path(tempfile.mkdtemp())
+        path = root / module
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(textwrap.dedent(body), encoding="utf-8")
+        return root
+
+    def test_the_import_list_is_read_from_our_own_code(self):
+        """Lista nu se scrie de mână, deci nu poate rămâne în urmă."""
+        imports = scan_yasb_imports()
+        self.assertIn("core.widgets.base", imports)
+        self.assertIn("BaseWidget", imports["core.widgets.base"])
+        self.assertIn("core.widgets.yasb.pomodoro", imports)
+        # modulele noastre nu sunt „împrumutate din YASB”
+        self.assertNotIn("core.widgets.yasb.mint_common", imports)
+        self.assertNotIn("core.validation.widgets.yasb.responsive", imports)
+
+    def test_a_missing_class_is_reported(self):
+        root = self._fake_yasb("""
+            class WorkspaceButton:
+                workspace_index = 0
+        """)
+        problems, _notes = contract_problems(root)
+        self.assertTrue(
+            any("WorkspaceWidget" in p for p in problems),
+            f"clasa lipsă nu a fost raportată: {problems}",
+        )
+
+    def test_a_missing_attribute_is_reported(self):
+        root = self._fake_yasb("""
+            class WorkspaceWidget:
+                def __init__(self):
+                    self.workspace_buttons = []
+                def _update_button(self):
+                    pass
+
+            class WorkspaceButton:
+                workspace_index = 0
+        """)
+        problems, _notes = contract_problems(root)
+        self.assertTrue(
+            any("_svc" in p for p in problems),
+            f"atributul lipsă nu a fost raportat: {problems}",
+        )
+
+    def test_an_inherited_attribute_counts(self):
+        root = self._fake_yasb("""
+            class Base:
+                def __init__(self):
+                    self._svc = None
+
+            class WorkspaceWidget(Base):
+                def __init__(self):
+                    super().__init__()
+                    self.workspace_buttons = []
+                def _update_button(self):
+                    pass
+
+            class WorkspaceButton:
+                workspace_index = 0
+        """)
+        problems, _notes = contract_problems(root)
+        self.assertFalse(any("_svc" in p for p in problems), f"atributul moștenit a fost ratat: {problems}")
+
+    def test_a_file_that_cannot_be_read_is_a_note_not_a_problem(self):
+        """YASB e scris pentru Python 3.14: citit cu o versiune mai veche, unele fișiere nu se analizează."""
+        root = self._fake_yasb("asta nu e Python valid (((")
+        problems, notes = contract_problems(root)
+        self.assertTrue(any("windows_desktops" in n for n in notes), f"nu s-a notat fișierul necitit: {notes}")
+        self.assertFalse(
+            any("windows_desktops nu mai are" in p for p in problems),
+            f"un fișier necitit nu trebuie raportat ca lipsă: {problems}",
+        )
+
+    def test_the_attribute_list_is_not_empty(self):
+        """Dacă lista se golește din greșeală, verificarea devine o formalitate."""
+        total = sum(len(attrs) for classes in CONTRACT_ATTRIBUTES.values() for attrs in classes.values())
+        self.assertGreater(total, 20, "contractul cu YASB a rămas aproape gol")
 
 
 if __name__ == "__main__":

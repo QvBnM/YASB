@@ -23,5 +23,8 @@ jobs:
       - name: Teste
         run: python tests/run.py
 
+      - name: Controlul de dinainte (partea care nu cere YASB)
+        run: python tools/mint_doctor.py
+
       - name: Lint
-        run: ruff check --line-length 130 src tools tests
+        run: ruff check src tools tests

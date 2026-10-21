@@ -1,0 +1,8 @@
+# Commit-ul YASB pe care bara a fost verificată. Instalarea rămâne pe el.
+# Se schimbă doar rulând setup.ps1 cu -YasbRef <ramura-sau-commit>.
+#
+# Acum e nefixat: la prima instalare reușită, setup.ps1 scrie aici commit-ul
+# care a funcționat, iar de atunci instalările următoare nu mai pleacă de pe el.
+# Nu l-am pus eu de la început pentru că nu știu pe ce commit merge bara ta acum:
+# în YASB nu există o versiune lansată 2.0.8, cea mai nouă e v2.0.7.
+unpinned

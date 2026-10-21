@@ -32,6 +32,40 @@ Rulat de două ori nu dublează nimic.
 În `yasb_palette.py` adaugă `--warn` (galbenul pentru valori peste prag), cu aceeași verificare de contrast ca `--accent`.
 Până atunci, `styles.css` are o valoare de rezervă.
 
+## Înainte să pornească bara
+
+Instalarea nu mai pleacă de pe ultima versiune YASB. Rămâne pe commit-ul pe care bara chiar a mers,
+scris în `tools/yasb-pin.txt`. Widget-urile noastre se sprijină pe lucruri din interiorul YASB, iar
+o schimbare la ei ar putea opri bara într-o dimineață, fără să fi atins tu nimic.
+
+```powershell
+.\setup.ps1                      # rămâne pe versiunea fixată
+.\setup.ps1 -YasbRef main        # trece conștient pe alta; dacă verificarea trece, se fixează pe ea
+```
+
+La final, înainte de pornire, rulează controlul:
+
+```powershell
+py -3.14 tools\mint_doctor.py --yasb C:\cale\catre\yasb
+```
+
+Verifică versiunea YASB, fiecare lucru din interiorul lor pe care ne sprijinim (citind codul, fără
+să-l pornească), fiecare widget numit într-o regulă din `config.yaml`, fiecare opțiune prin schema
+ei, și fiecare culoare din `styles.css`. Iese cu 1 dacă ceva ar strica bara, iar `setup.ps1` se
+oprește acolo și scrie ce anume.
+
+## Teste
+
+```powershell
+py -3.14 tests\run.py            # toate
+py -3.14 tests\run.py layout     # doar un fișier
+```
+
+112 verificări, fără Windows, fără PyQt6 și fără pytest: `tests/stubs.py` pune module înlocuitoare
+pentru Qt și pentru modulele YASB, ca logica barei să ruleze neschimbată. Rulează singure la fiecare
+modificare (`.github/workflows/tests.yml`). Ce NU acoperă: desenarea propriu-zisă și apelurile către
+Windows și COM.
+
 ## Ce face fiecare piesă
 
 **Reparații (styles.css, config.yaml)**
