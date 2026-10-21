@@ -119,6 +119,46 @@ def extract_with_pywal(image: Path) -> dict | None:
     return None
 
 
+SAMPLE_SIZE = (400, 225)  # pixeli luati ca atare din imagine, pentru culorile aprinse
+HUE_BUCKETS = 24  # 15 grade fiecare
+VIVID_MIN_SAT = 0.35
+VIVID_LIGHT = (0.20, 0.90)
+
+
+def vivid_candidates(colors: list[tuple[int, tuple[int, int, int]]], total: int) -> list[tuple[float, str]]:
+    """
+    Culorile aprinse ale imaginii, citite din pixeli nemodificati.
+
+    `colors` = (de cati pixeli, culoarea) exact asa cum sunt in imagine.
+
+    Doua lucruri le stricau pana acum. Cuantizarea imparte imaginea dupa cat loc ocupa fiecare
+    culoare, deci o dunga subtire de neon e inghitita de suprafata din jurul ei. Iar micsorarea
+    obisnuita amesteca dunga cu fundalul: neonul #ff6a1f ajungea in paleta ca un caramiziu
+    sters, si de acolo pe bara si mai spalacit.
+
+    Aici numaram pixelii aprinsi pe nuante (24 de felii de cate 15 grade) si pastram din
+    fiecare felie culoarea care apare cel mai des — neonul asa cum e el.
+    """
+    import colorsys
+
+    buckets: dict[int, dict[str, int]] = {}
+    for count, (r, g, b) in colors:
+        h, light, sat = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+        if sat < VIVID_MIN_SAT or not (VIVID_LIGHT[0] <= light <= VIVID_LIGHT[1]):
+            continue
+        slot = int(h * HUE_BUCKETS) % HUE_BUCKETS
+        seen = buckets.setdefault(slot, {})
+        key = f"#{r:02x}{g:02x}{b:02x}"
+        seen[key] = seen.get(key, 0) + count
+    out = []
+    for seen in buckets.values():
+        in_slice = sum(seen.values())
+        # cea mai des intalnita culoare din felie; la egalitate, mereu aceeasi
+        color = min(seen.items(), key=lambda kv: (-kv[1], kv[0]))[0]
+        out.append((in_slice / (total or 1), color))
+    return sorted(out, reverse=True)
+
+
 def extract_with_pillow(image: Path) -> dict | None:
     try:
         from PIL import Image
@@ -127,6 +167,11 @@ def extract_with_pillow(image: Path) -> dict | None:
     try:
         with Image.open(image) as im:
             im = im.convert("RGB")
+            # NEAREST alege pixeli adevarati din imagine, nu medii: o dunga subtire de neon
+            # ramane exact culoarea ei. Numaratoarea o face Pillow, nu noi pixel cu pixel.
+            sample = im.resize(SAMPLE_SIZE, Image.Resampling.NEAREST)
+            exact = sample.getcolors(maxcolors=SAMPLE_SIZE[0] * SAMPLE_SIZE[1]) or []
+            vivid = vivid_candidates(exact, SAMPLE_SIZE[0] * SAMPLE_SIZE[1])
             im.thumbnail((240, 240))
             q = im.quantize(colors=16, method=Image.Quantize.MEDIANCUT)
             pal = q.getpalette() or []
@@ -144,7 +189,8 @@ def extract_with_pillow(image: Path) -> dict | None:
     # fundalul = culoarea cu cel mai mult loc; accentul se alege mai incolo, din culoare si loc
     return {
         "bg": swatches[0][1],
-        "candidates": [(count / total, color) for count, color in swatches],
+        # cuantizarea da fundalul si culorile mari; pixelii aprinsi dau accentele, nestirbite
+        "candidates": [(count / total, color) for count, color in swatches] + vivid,
         "source": "pillow",
     }
 
@@ -192,10 +238,15 @@ def build_palette(bg: str, candidates: list[tuple[float, str]]) -> dict[str, str
     has_accent = bool(ranked)
     acc = ranked[0] if has_accent else "#7dd9c7"
     ah, al, as_ = hls(acc)
-    accent = from_hls(ah, min(max(al, 0.62), 0.78), min(max(as_, 0.45), 0.75))
+    # Pana aici am ales culoarea potrivita; aici o stricam mai putin. Marginile de dinainte
+    # (lumina intre 0.62 si 0.78, culoare pana la 0.75) faceau din orice neon un pastel: tot
+    # ce iesea din orice imagine avea aceeasi intensitate blanda. Le largim si lasam
+    # verificarea de contrast de mai jos sa se ocupe de citit.
+    accent = from_hls(ah, min(max(al, 0.52), 0.80), min(max(as_, 0.45), 0.92))
     second = next((c for c in ranked[1:] if hue_distance(hls(c)[0], ah) >= 40), None)
     sh, _sl, ss = hls(second) if second else ((ah + 0.12) % 1.0, 0, 0.5)
-    accent2 = from_hls(sh, 0.80, min(max(ss, 0.35), 0.6))
+    sl = hls(second)[1] if second else 0.78
+    accent2 = from_hls(sh, min(max(sl, 0.58), 0.84), min(max(ss, 0.35), 0.80))
 
     # dark surfaces take the wallpaper's hue: pywal's background when it has a real hue,
     # otherwise the accent's hue (pywal often returns an almost gray background).

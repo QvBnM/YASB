@@ -103,3 +103,128 @@ class TestPalette(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestVividCandidates(unittest.TestCase):
+    """
+    Culorile aprinse se numără pe nuanțe, din pixeli neatinși.
+
+    Cuantizarea împarte imaginea după cât loc ocupă fiecare culoare, deci o dungă subțire de
+    neon e înghițită de suprafața din jur. Iar micșorarea obișnuită o amestecă cu fundalul.
+    """
+
+    def test_the_exact_neon_survives(self):
+        from yasb_palette import vivid_candidates
+
+        # 400 de pixeli de neon curat și 60 amestecați cu fundalul, în aceeași felie de nuanță
+        colors = [(400, (255, 106, 31)), (60, (182, 79, 28))]
+        self.assertEqual(vivid_candidates(colors, 10_000)[0][1], "#ff6a1f")
+
+    def test_the_share_is_the_whole_slice(self):
+        from yasb_palette import vivid_candidates
+
+        colors = [(400, (255, 106, 31)), (60, (250, 110, 40))]
+        share, _ = vivid_candidates(colors, 10_000)[0]
+        self.assertAlmostEqual(share, 0.046, places=3)
+
+    def test_dull_and_dark_pixels_are_ignored(self):
+        from yasb_palette import vivid_candidates
+
+        self.assertEqual(vivid_candidates([(9_000, (40, 50, 62))], 10_000), [])  # gri-albăstrui
+        self.assertEqual(vivid_candidates([(9_000, (13, 16, 20))], 10_000), [])  # aproape negru
+
+    def test_different_hues_stay_apart(self):
+        from yasb_palette import vivid_candidates
+
+        colors = [(300, (255, 106, 31)), (300, (159, 214, 232))]
+        self.assertEqual(len(vivid_candidates(colors, 10_000)), 2)
+
+    def test_the_same_pixels_always_give_the_same_answer(self):
+        from yasb_palette import vivid_candidates
+
+        colors = [(100, (255, 0, 0)), (100, (0, 255, 0)), (100, (0, 0, 255))]
+        first = vivid_candidates(colors, 1_000)
+        self.assertEqual(vivid_candidates(list(reversed(colors)), 1_000), first)
+
+
+def _image(draw):
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGB", (800, 450), (13, 16, 20))
+    draw(ImageDraw.Draw(im))
+    return im
+
+
+def _palette(draw):
+    import tempfile
+
+    from yasb_palette import build_palette, extract_with_pillow
+
+    path = Path(tempfile.mkdtemp()) / "wallpaper.png"
+    _image(draw).save(path)
+    data = extract_with_pillow(path)
+    return build_palette(data["bg"], data["candidates"])
+
+
+def _night(d):
+    """
+    Ca wallpaper-ul lui: noapte, o dungă subțire de neon portocaliu, o lumină rece.
+
+    Dunga are patru pixeli dinadins: atât de subțire încât o micșorare obișnuită o amestecă
+    cu negrul din jur și scoate din ea un cărămiziu închis.
+    """
+    d.rectangle([0, 150, 800, 260], fill=(40, 50, 62))
+    d.rectangle([100, 120, 700, 124], fill=(255, 106, 31))
+    d.rectangle([150, 300, 650, 316], fill=(159, 214, 232))
+
+
+try:
+    import PIL  # noqa: F401
+
+    HAS_PIL = True
+except ImportError:  # pragma: no cover
+    HAS_PIL = False
+
+
+@unittest.skipUnless(HAS_PIL, "fără Pillow nu putem citi imagini")
+class TestOnRealImages(unittest.TestCase):
+    def test_the_neon_reaches_the_bar(self):
+        """Accentul trebuie să fie portocaliul din imagine, nu un cărămiziu amestecat."""
+        accent = _palette(_night)["accent"]
+        hue, _light, sat = hls(accent)
+        self.assertLess(abs(hue - hls("#ff6a1f")[0]), 0.02, f"altă nuanță: {accent}")
+        self.assertGreater(sat, 0.8, f"accent spălăcit: {accent}")
+
+    def test_the_second_accent_is_the_other_light(self):
+        from yasb_palette import hue_distance
+
+        p = _palette(_night)
+        self.assertGreaterEqual(hue_distance(hls(p["accent"])[0], hls(p["accent2"])[0]), 40)
+
+    def test_it_stays_readable(self):
+        from yasb_palette import contrast
+
+        p = _palette(_night)
+        self.assertGreaterEqual(contrast(p["text"], p["bar"]), 7.0)
+        self.assertGreaterEqual(contrast(p["accent"], p["bar"]), 4.5)
+        self.assertGreaterEqual(contrast(p["sub"], p["bar"]), 4.5)
+
+    def test_the_same_image_gives_the_same_palette(self):
+        self.assertEqual(_palette(_night), _palette(_night))
+
+    def test_a_grey_photo_stays_grey(self):
+        def grey(d):
+            d.rectangle([0, 0, 800, 450], fill=(60, 60, 62))
+            d.rectangle([0, 300, 800, 450], fill=(110, 110, 112))
+
+        p = _palette(grey)
+        self.assertLess(hls(p["bar"])[2], 0.12, "un wallpaper gri nu trebuie colorat din senin")
+
+    def test_a_warm_photo_gives_a_warm_accent(self):
+        def forest(d):
+            d.rectangle([0, 0, 800, 450], fill=(24, 42, 30))
+            d.rectangle([0, 300, 800, 450], fill=(46, 78, 52))
+            d.ellipse([300, 100, 500, 250], fill=(222, 196, 92))
+
+        hue = hls(_palette(forest)["accent"])[0]
+        self.assertLess(abs(hue - hls("#dec45c")[0]), 0.03, "soarele galben trebuie să dea accentul")
