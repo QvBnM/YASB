@@ -87,6 +87,10 @@ widgets:
       interval: 400
       processes: []                 # gol = orice fereastra maximizata care iese din ecran
       fullscreen_fit: []            # gol = fullscreen inseamna fullscreen, bara trece in spate
+      # Acopera ecranul doar o clipa, deci bara nu le cedeaza locul (la o captura, poza e
+      # oricum facuta cu bara in ea; ascunsul ei doar clipeste). Scoate un nume de aici daca
+      # vrei ca bara sa dispara si pentru el.
+      keep_bar_over: ["SnippingTool.exe", "ScreenClippingHost.exe", "ScreenSketch.exe", "GameBar.exe"]
 
   # Invizibil: moduri automate. Prima regula care se potriveste castiga.
   # Pune pe bara clasa "mode-<nume>" (ex. .mode-game in styles.css).

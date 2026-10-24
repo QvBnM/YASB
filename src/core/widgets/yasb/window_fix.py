@@ -179,6 +179,8 @@ class WindowFixWidget(BaseWidget):
         self._only = {p.lower() for p in config.processes}
         self._exclude = {p.lower() for p in config.exclude}
         self._fullscreen_fit = {p.lower() for p in config.fullscreen_fit}
+        # cui nu-i cedam locul: cele potrivite sub bara si cele care acopera ecranul doar o clipa
+        self._keep_bar = self._fullscreen_fit | {p.lower() for p in config.keep_bar_over}
         self._fixes: dict[int, list[float]] = {}  # hwnd -> times corrected (stop if an app fights back)
         self._gave_up: set[int] = set()  # ferestre care isi pun geometria la loc: le lasam in pace
         self._names: dict[int, str] = {}
@@ -360,7 +362,7 @@ class WindowFixWidget(BaseWidget):
         cls = ctypes.create_unicode_buffer(128)
         u.GetClassNameW(fg, cls, 128)
         name = self._process_name(fg)
-        if is_fullscreen_game(name, cls.value, pid.value == os.getpid(), frame, mon, self._fullscreen_fit):
+        if is_fullscreen_game(name, cls.value, pid.value == os.getpid(), frame, mon, self._keep_bar):
             self._game_hwnd = int(fg)
             self._set_bar_z(bar_hwnd, False)
             logging.info("window_fix: %s is fullscreen, bar goes behind it", name or fg)

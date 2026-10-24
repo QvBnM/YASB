@@ -281,6 +281,37 @@ class TestFullscreenGame(unittest.TestCase):
             is_fullscreen_game("eldenring.exe", "UnrealWindow", False, (0, 0, 1280, 720), self.MONITOR, self.KEEP)
         )
 
+    def test_a_capture_overlay_does_not_hide_the_bar(self):
+        """
+        Snipping Tool acoperă ecranul, dar nu e un joc.
+
+        În jurnal a trimis bara în spate și a adus-o înapoi de 35 de ori, episoade de la 0,8
+        la 11 secunde. Suprafața pe care tragi dreptunghiul e deja o poză a ecranului, cu bara
+        în ea: ascunsul barei nu schimbă ce iese din captură, doar clipește.
+        """
+        from core.validation.widgets.yasb.window_fix import WindowFixConfig
+
+        keep = {p.lower() for p in WindowFixConfig().keep_bar_over}
+        for app in ("SnippingTool.exe", "ScreenClippingHost.exe", "GameBar.exe"):
+            self.assertFalse(
+                is_fullscreen_game(app, "Windows.UI.Composition", False, self.FULL, self.MONITOR, keep),
+                f"{app} nu ar trebui sa trimita bara in spate",
+            )
+
+    def test_a_game_still_hides_it_with_that_list(self):
+        from core.validation.widgets.yasb.window_fix import WindowFixConfig
+
+        keep = {p.lower() for p in WindowFixConfig().keep_bar_over}
+        for app in ("DyingLightGame.exe", "cs2.exe", "3DMarkTimeSpy.exe"):
+            self.assertTrue(
+                is_fullscreen_game(app, "UnrealWindow", False, self.FULL, self.MONITOR, keep),
+                f"{app} pe tot ecranul ar trebui sa treaca peste bara",
+            )
+
+    def test_the_names_are_matched_whatever_the_case(self):
+        keep = {"snippingtool.exe"}
+        self.assertFalse(is_fullscreen_game("SnippingTool.exe", "Qt", False, self.FULL, self.MONITOR, keep))
+
     def test_covers_monitor_tolerance(self):
         self.assertTrue(covers_monitor((1, 1, 1919, 1079), self.MONITOR, tolerance=2))
         self.assertFalse(covers_monitor((10, 10, 1910, 1070), self.MONITOR, tolerance=2))
