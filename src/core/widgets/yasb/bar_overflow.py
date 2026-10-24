@@ -27,6 +27,7 @@ from core.utils.qobject import is_valid_qobject
 from core.utils.utilities import PopupWidget
 from core.validation.widgets.yasb.bar_overflow import BarOverflowConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.mint_common import fill_labels, find_named
 
@@ -133,7 +134,7 @@ class BarOverflowWidget(BaseWidget):
         # cat timp lista e deschisa, cifrele din ea raman vii
         self._refresh = QTimer(self)
         self._refresh.setInterval(config.refresh_interval)
-        self._refresh.timeout.connect(self._refresh_values)
+        health.connect(self._refresh, "overflow", self._refresh_values)
 
         self._events = EventService()
         self._hidden_signal.connect(self._on_hidden)

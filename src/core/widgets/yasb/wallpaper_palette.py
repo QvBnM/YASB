@@ -38,6 +38,7 @@ from PyQt6.QtWidgets import (
 from core.utils.utilities import PopupWidget
 from core.validation.widgets.yasb.wallpaper_palette import WallpaperPaletteConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.mint_common import contrast, ensure_contrast, fill_labels, from_hls, mix, rgb_to_hex, to_hls
 
@@ -268,7 +269,7 @@ class WallpaperPaletteWidget(BaseWidget):
         self._item_ready.connect(self._on_item)
 
         self._auto_timer = QTimer(self)
-        self._auto_timer.timeout.connect(self.next_wallpaper)
+        health.connect(self._auto_timer, "wallpaper", self.next_wallpaper)
         self._set_auto(self._auto)
         QTimer.singleShot(3000, self._precompute)  # galeria se deschide instant si prima data
 

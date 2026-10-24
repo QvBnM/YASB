@@ -34,6 +34,7 @@ from core.utils.tooltip import set_tooltip
 from core.utils.utilities import PopupWidget
 from core.validation.widgets.yasb.net_status import NetStatusConfig, SpeedtestConfig
 from core.widgets.base import BaseWidget
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb.bluetooth import BluetoothWidget
 
@@ -607,6 +608,7 @@ class NetStatusWidget(_LabelWidget):
         self.config = config
         self._state = NetState()
         self._bt_checked_at = 0.0
+        self._probe_complained = False
         self._menu: PopupWidget | None = None
         self._menu_refs: dict[str, QLabel | QPushButton] = {}
         self._setup_labels(config.label, config.label_alt)
@@ -619,7 +621,7 @@ class NetStatusWidget(_LabelWidget):
 
         self._timer = QTimer(self)
         self._timer.setInterval(config.update_interval)
-        self._timer.timeout.connect(self._update)
+        health.connect(self._timer, "network", self._update)
         self._timer.start()
         self._update()
 
@@ -631,8 +633,14 @@ class NetStatusWidget(_LabelWidget):
         try:
             self._state = probe(check_bt, self._state.bluetooth)
         except Exception as e:
-            logging.debug("net_status probe failed: %s", e)
+            # O sonda care nu merge nu e o greseala de cod: nu oprim widget-ul pentru ea (poate
+            # lipseste reteaua). Dar pana acum nu se vedea nicaieri — nici in jurnal, nici in
+            # "Starea barei" — asa ca o scriem o data, si iar daca si-a revenit intre timp.
+            if not self._probe_complained:
+                self._probe_complained = True
+                logging.warning("net_status: nu pot citi starea retelei (%s)", type(e).__name__)
             return
+        self._probe_complained = False
         if check_bt:
             self._bt_checked_at = now
         self._render()
@@ -820,7 +828,7 @@ class BluetoothAutoWidget(BluetoothWidget):
         self._check_radio()
         self._radio_timer = QTimer(self)
         self._radio_timer.setInterval(30_000)
-        self._radio_timer.timeout.connect(self._check_radio)
+        health.connect(self._radio_timer, "bluetooth", self._check_radio)
         self._radio_timer.start()
 
     def _check_radio(self) -> None:

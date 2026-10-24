@@ -22,6 +22,7 @@ from core.validation.widgets.yasb.hwinfo_sensor import HwinfoSensorConfig
 from core.widgets.base import BaseWidget
 from core.widgets.yasb import mint_visibility as visibility
 from core.widgets.yasb import mint_health as health
+from core.widgets.yasb.mint_common import ttl_cache
 
 SHARED_MEMORY_NAME = "Global\\HWiNFO_SENS_SM2"
 SIGNATURE = 0x53695748  # "HWiS"
@@ -153,6 +154,21 @@ def pick_reading(readings: list[Reading], match: list[str], rtype: int | None, s
     return None
 
 
+@ttl_cache(400)
+def readings() -> list[Reading]:
+    """Senzorii HWiNFO, o singura citire pentru toate barele.
+
+    Cu screens: ["*"] exista un cpu_temp in fiecare bara, si fiecare deschidea harta de memorie
+    partajata, o copia intreaga si o parsa — pentru acelasi raspuns, la fiecare update_interval.
+    400 ms e sub cel mai mic interval permis (500), deci nimeni nu vede o valoare mai veche decat
+    propria lui masuratoare; barele care bat aproape in acelasi timp iau raspunsul gata facut.
+
+    Lista intoarsa e aceeasi pentru toti, deci nu se umbla in ea: pick_reading doar filtreaza.
+    """
+    buf = read_shared_memory()
+    return parse_shared_memory(buf) if buf else []
+
+
 class HwinfoSensorWidget(BaseWidget):
     validation_schema = HwinfoSensorConfig
 
@@ -186,17 +202,16 @@ class HwinfoSensorWidget(BaseWidget):
         self._update()
 
     def _find(self) -> Reading | None:
-        buf = read_shared_memory()
-        if not buf:
+        found = readings()
+        if not found:
             return None
-        readings = parse_shared_memory(buf)
         if self._key is not None:
-            for r in readings:
+            for r in found:
                 if (r.sensor_index, r.reading_id) == self._key:
                     return r
             self._key = None  # HWiNFO restarted / sensors changed: search again
         rtype = None if self.config.reading_type == "any" else READING_TYPES[self.config.reading_type]
-        r = pick_reading(readings, self.config.match, rtype, self.config.sensor_match)
+        r = pick_reading(found, self.config.match, rtype, self.config.sensor_match)
         if r is not None:
             self._key = (r.sensor_index, r.reading_id)
             logging.info("HWiNFO sensor: using '%s' from '%s'", r.label, r.sensor)

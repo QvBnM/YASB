@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QLabel, QWidget
 
 from core.utils.qobject import is_valid_qobject
 from core.validation.widgets.yasb.active_title import ActiveTitleConfig
+from core.widgets.yasb import mint_health as health
 from core.widgets.yasb import mint_text
 from core.widgets.yasb.active_window import ActiveWindowWidget
 
@@ -27,7 +28,7 @@ class ActiveTitleWidget(ActiveWindowWidget):
         mint_text.add_stage(label, "fit", self._elide, mint_text.FIT)
         self._fit_timer = QTimer(self)
         self._fit_timer.setInterval(1000)
-        self._fit_timer.timeout.connect(self._fit)
+        health.connect(self._fit_timer, "active_window", self._fit)
         self._fit_timer.start()
 
 

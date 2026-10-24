@@ -6,7 +6,9 @@ jurnal și mănâncă procesor la nesfârșit — iar tu afli despre el abia câ
 Aici verificăm că se oprește singur după trei greșeli apropiate și că restul merge înainte.
 """
 
+import ast
 import unittest
+from pathlib import Path
 
 import stubs
 
@@ -182,3 +184,43 @@ class TestLogHygiene(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEveryRepeatingTimerIsInTheNet(unittest.TestCase):
+    """
+    Un cronometru care se repetă trece prin `health.connect`, nu direct prin `timeout.connect`.
+
+    Nu e o chestiune de stil: în PyQt6 o excepție netratată într-un slot nu rămâne la slot, ia
+    tot procesul — adică exact ce scrie `mint_health` că nu trebuie să se poată întâmpla. Testul
+    citește sursele, ca să nu se mai uite la următorul widget.
+
+    Cronometrele cu `setSingleShot(True)` (debounce, ascunderea unei bule) nu intră la socoteală.
+    """
+
+    WIDGETS = Path(__file__).resolve().parent.parent / "src" / "core" / "widgets" / "yasb"
+
+    def connected_directly(self, tree: ast.AST) -> list[str]:
+        """Numele cronometrelor legate cu `X.timeout.connect(...)`, fără cele single-shot."""
+        single_shot, direct = set(), []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            target = node.func.value
+            if node.func.attr == "setSingleShot" and node.args:
+                arg = node.args[0]
+                if isinstance(arg, ast.Constant) and arg.value:
+                    single_shot.add(ast.unparse(target))
+            elif node.func.attr == "connect" and isinstance(target, ast.Attribute):
+                if target.attr == "timeout":
+                    direct.append(ast.unparse(target.value))
+        return [name for name in direct if name not in single_shot]
+
+    def test_no_widget_connects_a_repeating_timer_by_hand(self):
+        missed = {}
+        for path in sorted(self.WIDGETS.glob("*.py")):
+            if path.name == "mint_health.py":
+                continue  # chiar el e plasa: acolo e singurul timeout.connect care are voie
+            names = self.connected_directly(ast.parse(path.read_text(encoding="utf-8")))
+            if names:
+                missed[path.name] = names
+        self.assertEqual(missed, {}, f"cronometre repetitive în afara plasei: {missed}")

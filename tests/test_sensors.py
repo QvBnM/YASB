@@ -9,6 +9,7 @@ stubs.install()
 
 from core.widgets.yasb.bar_notifications import shorten  # noqa: E402
 from core.widgets.yasb.git_branch import folder_from_title, parse_status  # noqa: E402
+from core.widgets.yasb import hwinfo_sensor  # noqa: E402
 from core.widgets.yasb.hwinfo_sensor import parse_shared_memory, pick_reading  # noqa: E402
 from core.widgets.yasb.net_status import Adapter, format_speed, pick_connection  # noqa: E402
 from core.widgets.yasb.progress_line import IDLE_MS, torrents_progress, tick_interval  # noqa: E402
@@ -251,6 +252,52 @@ class TestShorten(unittest.TestCase):
 
     def test_whitespace_is_collapsed(self):
         self.assertEqual(shorten("a  \n b", 20), "a b")
+
+
+
+
+class TestHwinfoIsReadOnceForAllBars(unittest.TestCase):
+    """
+    Cu screens: ["*"] exista un cpu_temp in fiecare bara. Harta de memorie a lui HWiNFO se
+    deschide, se copiaza si se parseaza o singura data pentru toate, nu o data pe bara.
+    """
+
+    def setUp(self):
+        self.calls = []
+        self.real = hwinfo_sensor.read_shared_memory
+        buf = hwinfo_buffer(["CPU [#0]: AMD Ryzen"], [(1, 0, 10, "CPU (Tctl/Tdie)", "°C", 54.5)])
+
+        def counted():
+            self.calls.append(1)
+            return buf
+
+        hwinfo_sensor.read_shared_memory = counted
+        hwinfo_sensor.readings.cache_clear()
+
+    def tearDown(self):
+        hwinfo_sensor.read_shared_memory = self.real
+        hwinfo_sensor.readings.cache_clear()
+
+    def test_three_bars_one_read(self):
+        first = hwinfo_sensor.readings()
+        for _ in range(2):  # celelalte doua bare, in aceeasi clipa
+            hwinfo_sensor.readings()
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(first[0].label, "CPU (Tctl/Tdie)")
+
+    def test_the_answer_is_the_same_one(self):
+        self.assertIs(hwinfo_sensor.readings(), hwinfo_sensor.readings())
+
+    def test_a_new_measurement_reads_again(self):
+        hwinfo_sensor.readings()
+        hwinfo_sensor.readings.cache_clear()  # ca dupa ce a trecut timpul
+        hwinfo_sensor.readings()
+        self.assertEqual(len(self.calls), 2)
+
+    def test_nothing_shared_means_no_readings(self):
+        hwinfo_sensor.read_shared_memory = lambda: None
+        hwinfo_sensor.readings.cache_clear()
+        self.assertEqual(hwinfo_sensor.readings(), [])
 
 
 if __name__ == "__main__":
