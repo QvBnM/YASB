@@ -24,6 +24,10 @@ from core.widgets.base import BaseWidget
 
 Rect = tuple[int, int, int, int]  # left, top, right, bottom
 
+# re-registering the app bar after Windows drops the reservation only ever works right away;
+# if it keeps failing, Windows is refusing it and retrying for ever only fills the log
+GUARD_MAX_RETRIES = 6
+
 
 def compute_fix(window: Rect, frame: Rect, work: Rect, monitor: Rect, tolerance: int = 2) -> Rect | None:
     """New window rect that puts the visible frame exactly on the work area, or None if it already fits.
@@ -177,6 +181,8 @@ class WindowFixWidget(BaseWidget):
         # one window_fix lives in every bar (one per monitor): each guards its own bar
         self._guard_next = 0.0
         self._guard_backoff = 2.0
+        self._guard_fails = 0
+        self._guard_geometry: tuple[Rect, Rect] | None = None  # work/monitor the failures belong to
         if config.guard_reserved_space:
             self._guard_timer = QTimer(self)
             self._guard_timer.setInterval(1000)
@@ -194,6 +200,17 @@ class WindowFixWidget(BaseWidget):
         self._names[hwnd] = name
         return name
 
+    @staticmethod
+    def _screen_alive(screen: object) -> bool:
+        """False when Qt already deleted the QScreen behind it (bars are being re-created)."""
+        if screen is None:
+            return False
+        try:
+            screen.devicePixelRatio()  # type: ignore[attr-defined]
+        except RuntimeError:
+            return False
+        return True
+
     def _guard(self) -> None:
         try:
             self._guard_reserved_space()
@@ -208,6 +225,11 @@ class WindowFixWidget(BaseWidget):
             return
         if not bar.isVisible():
             return  # hidden (auto-hide, fullscreen): nothing reserved on purpose
+        if self._game_hwnd:
+            return  # the bar is behind a fullscreen window on purpose: Windows drops the work area then
+        screen = bar.screen()
+        if not self._screen_alive(screen) or not self._screen_alive(getattr(bar, "target_screen", screen)):
+            return  # the screens are being re-initialised: the bar re-registers itself when it comes back
         now = time.monotonic()
         if now < self._guard_next:
             return
@@ -220,19 +242,42 @@ class WindowFixWidget(BaseWidget):
         dims = getattr(bar, "dimensions", {})
         pad = getattr(bar, "padding", {})
         logical = int(dims.get("height", 0)) + int(pad.get("top", 0)) + int(pad.get("bottom", 0))
-        bar_px = round(logical * bar.screen().devicePixelRatio()) if bar.screen() else logical
+        bar_px = round(logical * screen.devicePixelRatio())
         work, mon = _rect(info.rcWork), _rect(info.rcMonitor)
         if not reservation_missing(edge, bar_px, work, mon):
             self._guard_backoff = 2.0
+            self._guard_fails = 0
+            self._guard_geometry = None
             return
-        logging.warning(
-            "window_fix: Windows lost the space reserved for the bar (work %s, monitor %s): re-registering", work, mon
+        if self._guard_geometry != (work, mon):  # a new work area: worth trying again
+            self._guard_geometry = (work, mon)
+            self._guard_fails = 0
+            self._guard_backoff = 2.0
+        if self._guard_fails >= GUARD_MAX_RETRIES:
+            return  # already given up on this work area; it is retried when the work area changes
+        self._guard_fails += 1
+        log = logging.warning if self._guard_fails == 1 else logging.debug
+        log(
+            "window_fix: Windows lost the space reserved for the bar (work %s, monitor %s): re-registering (%d/%d)",
+            work,
+            mon,
+            self._guard_fails,
+            GUARD_MAX_RETRIES,
         )
         try:
             manager.remove_appbar()
             bar.update_app_bar()
+        except RuntimeError as e:
+            logging.debug("window_fix: the bar went away while re-registering it: %s", e)
+            return
         except Exception:
             logging.exception("window_fix: re-registering the bar failed")
+        if self._guard_fails >= GUARD_MAX_RETRIES:
+            logging.warning(
+                "window_fix: could not get the space for the bar back after %d tries; "
+                "leaving it until the work area changes",
+                GUARD_MAX_RETRIES,
+            )
         # if something keeps undoing it, try less and less often (2 s ... 60 s)
         self._guard_next = now + self._guard_backoff
         self._guard_backoff = min(self._guard_backoff * 2, 60.0)

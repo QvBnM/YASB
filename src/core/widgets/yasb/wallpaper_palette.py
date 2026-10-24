@@ -253,6 +253,7 @@ class WallpaperPaletteWidget(BaseWidget):
         self._popup: PopupWidget | None = None
         self._worker: threading.Thread | None = None
         self._auto = config.auto_change
+        self._unreadable: set[str] = set()  # foldere deja raportate: nu umplem log-ul la fiecare scanare
 
         self._init_container()
         self.build_widget_label(config.label)
@@ -276,13 +277,17 @@ class WallpaperPaletteWidget(BaseWidget):
         roots = self.config.image_path if isinstance(self.config.image_path, list) else [self.config.image_path]
         out: list[str] = []
         for root in roots:
-            root = os.path.expandvars(os.path.expanduser(root))
+            root = os.path.normpath(os.path.expandvars(os.path.expanduser(root)))
             try:
                 for entry in sorted(os.scandir(root), key=lambda e: e.name.lower()):
                     if entry.is_file() and os.path.splitext(entry.name)[1].lower() in IMAGE_EXT:
                         out.append(os.path.abspath(entry.path))
-            except OSError:
-                logging.warning("wallpaper_palette: nu pot citi folderul %s", root)
+            except OSError as e:
+                if root not in self._unreadable:
+                    self._unreadable.add(root)
+                    logging.warning("wallpaper_palette: nu pot citi folderul %s (%s)", root, e.strerror or e)
+            else:
+                self._unreadable.discard(root)
         return out[: self.config.max_images]
 
     def _precompute(self) -> None:
