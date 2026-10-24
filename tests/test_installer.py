@@ -215,3 +215,84 @@ class TestThePatchesAreNotOptional(unittest.TestCase):
         doctor = (REPO / "tools" / "mint_doctor.py").read_text(encoding="utf-8")
         self.assertTrue("def check_patches" in doctor, "doctorul nu are verificarea peticelor")
         self.assertTrue("check_patches(yasb)," in doctor, "verificarea peticelor există, dar nu e pusă în listă")
+
+
+class TestThePythonVersionIsWrittenOnce(unittest.TestCase):
+    """
+    Versiunea de Python stă într-un singur loc.
+
+    Era scrisă de 18 ori în setup.ps1 — în pachetul winget, în fiecare `py -3.14`, și în
+    argumentele scurtăturilor din Startup. O trecere pe 3.15 însemna 18 modificări, iar una
+    uitată într-o scurtătură nu se vede până la următoarea logare, când bara nu mai pornește.
+    """
+
+    def setUp(self):
+        self.setup = SETUP.read_text(encoding="utf-8", errors="replace")
+
+    def test_it_is_a_parameter_you_can_pass(self):
+        self.assertTrue(
+            re.search(r"\[string\]\$PythonVersion\s*=\s*\"\d+\.\d+\"", self.setup) is not None,
+            "setup.ps1 nu are parametrul -PythonVersion cu o valoare implicită",
+        )
+
+    def test_the_number_appears_only_in_that_one_place(self):
+        """Orice alt rând cu versiunea scrisă de mână e un loc uitat la următoarea trecere."""
+        default = re.search(r"\[string\]\$PythonVersion\s*=\s*\"(\d+\.\d+)\"", self.setup)
+        self.assertIsNotNone(default, "fără valoare implicită nu pot verifica restul")
+        version = default.group(1)
+        offenders = [
+            line.strip()
+            for line in self.setup.splitlines()
+            if version in line and not line.strip().startswith("#") and "$PythonVersion =" not in line
+        ]
+        self.assertEqual(offenders, [], f"versiunea {version} e scrisă și aici, nu doar în parametru")
+
+    def test_every_python_call_goes_through_the_flag(self):
+        calls = re.findall(r"& py (\S+)", self.setup)
+        self.assertTrue(calls, "nu găsesc niciun apel de python în setup.ps1")
+        self.assertEqual(
+            sorted(set(calls)), ["$pyFlag"], "un apel de python nu folosește $pyFlag"
+        )
+
+    def test_the_startup_shortcuts_use_it_too(self):
+        """Scurtăturile din Startup sunt singurul loc care se vede abia la logarea următoare."""
+        for arguments in re.findall(r"\.Arguments = \"([^\"]*)", self.setup):
+            self.assertTrue(arguments.startswith("$pyFlag"), f"scurtătura pornește cu '{arguments}'")
+
+    def test_the_flag_is_built_before_it_is_used(self):
+        built = self.setup.index('$pyFlag = "-$PythonVersion"')
+        first_use = self.setup.index("& py $pyFlag")
+        self.assertLess(built, first_use, "$pyFlag e folosit înainte de a fi construit")
+
+    def test_the_version_banner_has_its_own_name(self):
+        """
+        În PowerShell numele de variabile nu țin cont de litere mari/mici: un `$pyVersion`
+        care ține textul scos de `py --version` ar fi aceeași variabilă cu `$PythonVersion`
+        și i-ar strivi valoarea în silențiu.
+        """
+        self.assertNotIn("$pyVersion", self.setup)
+
+
+class TestTheBackupsDoNotPileUp(unittest.TestCase):
+    """Fiecare instalare lasă câte o copie de config.yaml și styles.css; se păstrează ultimele."""
+
+    def setUp(self):
+        self.setup = SETUP.read_text(encoding="utf-8", errors="replace")
+
+    def test_old_ones_are_removed(self):
+        self.assertTrue(
+            re.search(r"Filter \"\$f\.backup-\*\"", self.setup) is not None,
+            "nimeni nu se uită la copiile vechi",
+        )
+        self.assertTrue(
+            re.search(r"Select-Object -Skip \d+", self.setup) is not None,
+            "copiile vechi nu sunt tăiate la un număr",
+        )
+
+    def test_the_newest_are_the_ones_kept(self):
+        """Numele are data în față, deci ordonarea descrescătoare pe nume = de la cea mai nouă."""
+        self.assertIn("yyyyMMdd-HHmmss", self.setup)
+        self.assertTrue(
+            re.search(r"Sort-Object Name -Descending", self.setup) is not None,
+            "fără ordonare descrescătoare s-ar șterge tocmai copiile noi",
+        )

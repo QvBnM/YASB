@@ -3,6 +3,7 @@
 #  Ruleaza din folderul yasb-setup:
 #     powershell -ExecutionPolicy Bypass -File .\setup.ps1
 #  Optional:  -YasbPath "D:\dev\yasb"   -NoAutostart   -NoHWiNFO   -ForceHWiNFO
+#             -PythonVersion 3.13
 # ============================================================
 
 param(
@@ -13,8 +14,15 @@ param(
     [string]$YasbRef = "",
     [switch]$NoAutostart,
     [switch]$NoHWiNFO,
-    [switch]$ForceHWiNFO
+    [switch]$ForceHWiNFO,
+    # Versiunea de Python pe care merge bara, scrisa intr-un singur loc: de aici se iau si
+    # pachetul din winget, si lansatorul (py -3.14), si scurtaturile din Startup. Pana acum
+    # era scrisa de 18 ori in script, deci o schimbare insemna 18 modificari.
+    [string]$PythonVersion = "3.14"
 )
+
+# Steagul lansatorului: "py -3.14 fisier.py" alege anume versiunea asta, oricate ai instalate.
+$pyFlag = "-$PythonVersion"
 
 # Continue: git/winget write progress to stderr, which would abort PowerShell 5 on "Stop".
 # Every step that matters checks its own result and throws.
@@ -47,18 +55,18 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 }
 Ok "winget gasit"
 
-# ---------- 2. Python 3.14 + Git ----------
-Step "Instalez Python 3.14 si Git"
-Winget-Install "Python.Python.3.14" "Python 3.14"
+# ---------- 2. Python + Git ----------
+Step "Instalez Python $PythonVersion si Git"
+Winget-Install "Python.Python.$PythonVersion" "Python $PythonVersion"
 Winget-Install "Git.Git" "Git"
 Refresh-Path
 
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
     throw "Lansatorul 'py' nu e in PATH. Inchide si redeschide PowerShell, apoi ruleaza din nou scriptul."
 }
-$pyVersion = & py -3.14 --version
-if ($LASTEXITCODE -ne 0) { throw "Python 3.14 nu raspunde (py -3.14). Redeschide PowerShell si ruleaza din nou." }
-Ok $pyVersion
+$pyBanner = & py $pyFlag --version
+if ($LASTEXITCODE -ne 0) { throw "Python $PythonVersion nu raspunde (py $pyFlag). Redeschide PowerShell si ruleaza din nou." }
+Ok $pyBanner
 
 # ---------- 3. Font JetBrainsMono Nerd Font ----------
 Step "Instalez fontul JetBrainsMono Nerd Font"
@@ -149,10 +157,10 @@ if ($yasbCommit) {
 
 # ---------- 5. Widget-urile noastre (tot ce e in src/ + comenzile barei in lansator) ----------
 Step "Copiez widget-urile (sunet, retea, temperatura, moduri, notificari, lansator...)"
-$mintOut = & py -3.14 (Join-Path $here "tools\mint_install.py") --yasb $YasbPath --src-only 2>&1
+$mintOut = & py $pyFlag (Join-Path $here "tools\mint_install.py") --yasb $YasbPath --src-only 2>&1
 if ($LASTEXITCODE -ne 0) { $mintOut | ForEach-Object { Warn $_ }; throw "Nu am putut copia widget-urile (vezi mesajul de mai sus)." }
 $mintOut | Where-Object { $_ -match "fisiere copiate|Lansator" } | ForEach-Object { Ok $_ }
-$patchOut = & py -3.14 (Join-Path $here "tools\yasb_patch.py") $YasbPath
+$patchOut = & py $pyFlag (Join-Path $here "tools\yasb_patch.py") $YasbPath
 $patchExit = $LASTEXITCODE
 foreach ($line in @($patchOut)) { if ($line -like "*patched*") { Ok $line } else { Warn $line } }
 # Peticul din main.py nu e un moft: fara el qasync ia PyQt5 daca alt program l-a instalat, si
@@ -163,16 +171,16 @@ if ($patchExit -ne 0) { throw "Peticul din main.py nu s-a aplicat (vezi rindul g
 # ---------- 6. Dependente ----------
 Step "Instalez dependentele YASB (dureaza 1-2 minute)"
 Push-Location $YasbPath
-& py -3.14 -m pip install --upgrade pip --quiet
-& py -3.14 -m pip install . --quiet
+& py $pyFlag -m pip install --upgrade pip --quiet
+& py $pyFlag -m pip install . --quiet
 $pipExit = $LASTEXITCODE
 Pop-Location
-if ($pipExit -ne 0) { throw "pip install a esuat. Ruleaza manual: cd $YasbPath; py -3.14 -m pip install ." }
+if ($pipExit -ne 0) { throw "pip install a esuat. Ruleaza manual: cd $YasbPath; py $pyFlag -m pip install ." }
 Ok "Dependente instalate"
 
 Step "Instalez pywal (culori din wallpaper)"
 # psutil nu mai e nevoie: widget-urile citesc procesele direct din Windows (mint_common.py)
-& py -3.14 -m pip install pywal16 colorthief speedtest-cli --quiet
+& py $pyFlag -m pip install pywal16 colorthief speedtest-cli --quiet
 if ($LASTEXITCODE -ne 0) {
     Warn "pywal nu s-a instalat; recolorarea merge oricum, cu extractorul inclus (Pillow)."
 } else {
@@ -188,6 +196,12 @@ foreach ($f in "config.yaml", "styles.css") {
         $backup = "$dest.backup-" + (Get-Date -Format "yyyyMMdd-HHmmss")
         Copy-Item $dest $backup
         Warn "Am salvat vechiul $f ca $(Split-Path $backup -Leaf)"
+        # Pastram ultimele 5 copii. Pana acum se adunau cate doua la fiecare instalare si nu
+        # pleca nimeni sa le stearga. Numele are data in fata (yyyyMMdd-HHmmss), deci ordonarea
+        # alfabetica descrescatoare le pune pe cele noi primele.
+        Get-ChildItem -Path $configDir -Filter "$f.backup-*" -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending | Select-Object -Skip 5 |
+            ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
     }
     Copy-Item (Join-Path $here "config\$f") $dest -Force -ErrorAction Stop
     Ok $f
@@ -219,7 +233,7 @@ $toolsFwd = $toolsDir -replace "\\", "/"
 $cfgText = [IO.File]::ReadAllText($cfgFile).Replace("__YASB_TOOLS__", $toolsFwd)
 [IO.File]::WriteAllText($cfgFile, $cfgText, (New-Object System.Text.UTF8Encoding($false)))
 Ok "Speed test: click pe el in bara (langa viteza retelei)"
-& py -3.14 $paletteScript --once
+& py $pyFlag $paletteScript --once
 if ($LASTEXITCODE -eq 0) {
     Ok "Paleta generata (vezi $configDir\palette.log)"
 } else {
@@ -232,7 +246,7 @@ if ($LASTEXITCODE -eq 0) {
 # Daca ceva nu se potriveste, instalarea se opreste aici si scrie ce anume, in loc sa pornesti o
 # bara care pica. Daca trece, versiunea YASB de acum devine cea fixata.
 Step "Verific totul inainte de pornire"
-& py -3.14 (Join-Path $here "tools\mint_doctor.py") --yasb $YasbPath --config $configDir --record-pin
+& py $pyFlag (Join-Path $here "tools\mint_doctor.py") --yasb $YasbPath --config $configDir --record-pin
 if ($LASTEXITCODE -ne 0) {
     throw "Verificarea a gasit probleme (vezi lista de mai sus). Bara nu a fost pornita."
 }
@@ -278,7 +292,7 @@ if (-not $NoAutostart) {
         $shell = New-Object -ComObject WScript.Shell
         $sc = $shell.CreateShortcut($lnk)
         $sc.TargetPath = $pyw
-        $sc.Arguments = "-3.14 `"$main`""
+        $sc.Arguments = "$pyFlag `"$main`""
         $sc.WorkingDirectory = Join-Path $YasbPath "src"
         $sc.Description = "YASB status bar"
         $sc.Save()
@@ -287,7 +301,7 @@ if (-not $NoAutostart) {
         $lnk2 = Join-Path ([Environment]::GetFolderPath("Startup")) "YASB Palette.lnk"
         $sc2 = $shell.CreateShortcut($lnk2)
         $sc2.TargetPath = $pyw
-        $sc2.Arguments = "-3.14 `"$paletteScript`""
+        $sc2.Arguments = "$pyFlag `"$paletteScript`""
         $sc2.WorkingDirectory = $toolsDir
         $sc2.Description = "YASB: recolorare automata din wallpaper"
         $sc2.Save()
@@ -300,10 +314,10 @@ if (-not $NoAutostart) {
 # ---------- 9. Pornesc YASB + recolorarea ----------
 Step "Pornesc YASB si urmarirea wallpaper-ului"
 if ($pyw) {
-    Start-Process $pyw -ArgumentList "-3.14", "`"$paletteScript`"" -WorkingDirectory $toolsDir
-    Start-Process $pyw -ArgumentList "-3.14", "`"$main`"" -WorkingDirectory (Join-Path $YasbPath "src")
+    Start-Process $pyw -ArgumentList $pyFlag, "`"$paletteScript`"" -WorkingDirectory $toolsDir
+    Start-Process $pyw -ArgumentList $pyFlag, "`"$main`"" -WorkingDirectory (Join-Path $YasbPath "src")
 } else {
-    Start-Process py -ArgumentList "-3.14", "`"$main`"" -WorkingDirectory (Join-Path $YasbPath "src")
+    Start-Process py -ArgumentList $pyFlag, "`"$main`"" -WorkingDirectory (Join-Path $YasbPath "src")
 }
 
 Write-Host @"
