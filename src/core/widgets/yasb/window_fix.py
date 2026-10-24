@@ -96,6 +96,41 @@ def keeps_undoing(recent: list[float], limit: int = GIVE_UP_LIMIT) -> bool:
     return len(recent) >= limit
 
 
+GUARD_GIVE_UP = 6  # cate reinregistrari incercam pentru aceeasi zona de lucru
+GUARD_NAME = "window_fix paza"  # socoteala ei la mint_health, separata de corectarea ferestrelor
+
+
+def keeps_refusing(fails: int, limit: int = GUARD_GIVE_UP) -> bool:
+    """Windows nu da spatiul inapoi oricat insistam? Atunci ne oprim si asteptam o schimbare."""
+    return fails >= limit
+
+
+def mine_to_fix(window_monitor: int, bar_monitor: int) -> bool:
+    """Fereastra e pe monitorul barei mele, adica a mea de corectat?
+
+    Fiecare bara are propriul window_fix. Pana acum fiecare corecta orice fereastra din fata,
+    oricare ar fi monitorul ei: cu trei bare, in jurnal se vede aceeasi fereastra mutata de noua
+    ori intr-o secunda si trei randuri "nu mai incerc" in loc de unul (10-24, 10:52:40, nvidia
+    app.exe). Si pragul de renuntare ajungea de trei ori mai mare decat cel scris in cod.
+
+    Zero inseamna "nu se stie pe ce monitor": atunci nu refuzam nimic, ca pana acum.
+    """
+    if not window_monitor or not bar_monitor:
+        return True
+    return window_monitor == bar_monitor
+
+
+def screen_alive(screen: object) -> bool:
+    """Ecranul mai e al cui credem, sau Qt l-a sters deja (bare in reconstruire)?"""
+    if screen is None:
+        return False
+    try:
+        screen.devicePixelRatio()  # type: ignore[attr-defined]
+    except RuntimeError:
+        return False
+    return True
+
+
 def covers_monitor(frame: Rect, monitor: Rect, tolerance: int = 2) -> bool:
     fl, ft, fr, fb = frame
     ml, mt, mr, mb = monitor
@@ -172,10 +207,12 @@ class WindowFixWidget(BaseWidget):
         # one window_fix lives in every bar (one per monitor): each guards its own bar
         self._guard_next = 0.0
         self._guard_backoff = 2.0
+        self._guard_fails = 0
+        self._guard_area: tuple[Rect, Rect] | None = None  # zona de lucru de care e vorba
         if config.guard_reserved_space:
             self._guard_timer = QTimer(self)
             self._guard_timer.setInterval(1000)
-            self._guard_timer.timeout.connect(self._guard)
+            health.connect(self._guard_timer, GUARD_NAME, self._guard_reserved_space)
             self._guard_timer.start()
 
     def _process_name(self, hwnd: int) -> str:
@@ -189,12 +226,6 @@ class WindowFixWidget(BaseWidget):
         self._names[hwnd] = name
         return name
 
-    def _guard(self) -> None:
-        try:
-            self._guard_reserved_space()
-        except Exception as e:
-            logging.debug("window_fix guard: %s", e)
-
     def _guard_reserved_space(self) -> None:
         bar = self.window()
         flags = getattr(bar, "window_flags", None)
@@ -203,9 +234,14 @@ class WindowFixWidget(BaseWidget):
             return
         if not bar.isVisible():
             return  # hidden (auto-hide, fullscreen): nothing reserved on purpose
-        now = time.monotonic()
-        if now < self._guard_next:
-            return
+        if self._game_hwnd:
+            return  # bara sta anume in spatele unei ferestre pe tot ecranul: atunci Windows ia zona de lucru
+        screen = bar.screen()
+        if not screen_alive(screen) or not screen_alive(getattr(bar, "target_screen", screen)):
+            # Exact asta se vede in jurnal la 09:49:37, cand s-a schimbat un monitor: bar_manager
+            # desfacea barele ("Screens updated. Re-initialising all bars"), iar paza, pornita la
+            # fiecare secunda, ajungea la un ecran pe care Qt il stersese deja.
+            return  # ecranele se refac; bara se reinregistreaza singura cand revine
         hwnd = int(bar.winId())
         info = _MONITORINFO()
         info.cbSize = ctypes.sizeof(info)
@@ -215,22 +251,49 @@ class WindowFixWidget(BaseWidget):
         dims = getattr(bar, "dimensions", {})
         pad = getattr(bar, "padding", {})
         logical = int(dims.get("height", 0)) + int(pad.get("top", 0)) + int(pad.get("bottom", 0))
-        bar_px = round(logical * bar.screen().devicePixelRatio()) if bar.screen() else logical
+        bar_px = round(logical * screen.devicePixelRatio())
         work, mon = _rect(info.rcWork), _rect(info.rcMonitor)
+        now = time.monotonic()
         if not reservation_missing(edge, bar_px, work, mon):
-            self._guard_backoff = 2.0
+            self._guard_backoff, self._guard_fails, self._guard_area = 2.0, 0, None
             return
-        logging.warning(
-            "window_fix: Windows lost the space reserved for the bar (work %s, monitor %s): re-registering", work, mon
+        if self._guard_area != (work, mon):
+            # Alta zona de lucru (un program a intrat sau a iesit din fullscreen, taskbar-ul s-a
+            # mutat): situatie noua, se incearca de la capat, fara sa astepte rabatul de dinainte.
+            # Dar nu chiar imediat: o zona care tot pleaca si vine ar scrie iar un rand pe secunda.
+            self._guard_area = (work, mon)
+            self._guard_backoff, self._guard_fails = 2.0, 0
+            self._guard_next = min(self._guard_next, now + 2.0)
+        if now < self._guard_next:
+            return
+        if keeps_refusing(self._guard_fails):
+            return  # ne-am oprit pentru zona asta; reincercam cand se schimba ea
+        self._guard_fails += 1
+        # Un rand in jurnal, la prima incercare. Pana acum scriam unul la fiecare incercare: in
+        # jurnalul tau sunt 100 de randuri identice, din minut in minut, de la 19:41 pana la capat.
+        log = logging.warning if self._guard_fails == 1 else logging.debug
+        log(
+            "window_fix: Windows lost the space reserved for the bar (work %s, monitor %s): re-registering (%d/%d)",
+            work,
+            mon,
+            self._guard_fails,
+            GUARD_GIVE_UP,
         )
-        try:
-            manager.remove_appbar()
-            bar.update_app_bar()
-        except Exception:
-            logging.exception("window_fix: re-registering the bar failed")
         # if something keeps undoing it, try less and less often (2 s ... 60 s)
         self._guard_next = now + self._guard_backoff
         self._guard_backoff = min(self._guard_backoff * 2, 60.0)
+        try:
+            manager.remove_appbar()
+            bar.update_app_bar()
+        except RuntimeError as exc:
+            # bara a disparut intre masuratoare si reinregistrare: nu e greseala nimanui
+            logging.debug("window_fix: nu mai e bara de reinregistrat (%s)", exc)
+            return
+        if keeps_refusing(self._guard_fails):
+            logging.warning(
+                "window_fix: nu pot lua inapoi locul barei dupa %d incercari; o las pana se schimba zona de lucru",
+                GUARD_GIVE_UP,
+            )
 
     def _check(self) -> None:
         try:
@@ -302,11 +365,24 @@ class WindowFixWidget(BaseWidget):
             self._set_bar_z(bar_hwnd, False)
             logging.info("window_fix: %s is fullscreen, bar goes behind it", name or fg)
 
+    def _bar_monitor(self) -> int:
+        """Monitorul pe care sta bara mea; 0 daca nu se poate afla acum."""
+        bar = self.window()
+        if bar is None or bar is self:
+            return 0
+        try:
+            return int(self._user32.MonitorFromWindow(int(bar.winId()), 2) or 0)
+        except RuntimeError:
+            return 0  # bara se reface; la trecerea urmatoare o gasim
+
     def _check_foreground(self) -> None:
         u = self._user32
         hwnd = u.GetForegroundWindow()
         if not hwnd:
             return
+        hmon = int(u.MonitorFromWindow(hwnd, 2) or 0)
+        if not mine_to_fix(hmon, self._bar_monitor()):
+            return  # de fereastra asta se ocupa bara de pe monitorul ei
         zoomed = bool(u.IsZoomed(hwnd))
         name = self._process_name(hwnd).lower()
         if name in self._exclude:
@@ -323,7 +399,7 @@ class WindowFixWidget(BaseWidget):
             frame = win  # DWMWA_EXTENDED_FRAME_BOUNDS unavailable
         info = _MONITORINFO()
         info.cbSize = ctypes.sizeof(info)
-        if not u.GetMonitorInfoW(u.MonitorFromWindow(hwnd, 2), ctypes.byref(info)):
+        if not u.GetMonitorInfoW(hmon, ctypes.byref(info)):
             return
         args = (_rect(win), _rect(frame), _rect(info.rcWork), _rect(info.rcMonitor), self.config.tolerance)
         new, why = None, ""

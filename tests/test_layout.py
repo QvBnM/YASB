@@ -16,12 +16,16 @@ from core.widgets.yasb.responsive import (  # noqa: E402
     still_hidden,
 )
 from core.widgets.yasb.window_fix import (  # noqa: E402
+    GUARD_GIVE_UP,
     compute_fix,
     keeps_undoing,
+    keeps_refusing,
     compute_fullscreen_fit,
     covers_monitor,
     is_fullscreen_game,
+    mine_to_fix,
     reservation_missing,
+    screen_alive,
 )
 
 
@@ -298,6 +302,112 @@ class TestGivingUp(unittest.TestCase):
 
     def test_a_window_we_never_touched(self):
         self.assertFalse(keeps_undoing([]))
+
+
+class TestGivingUpOnWindows(unittest.TestCase):
+    """
+    Nici spațiul rezervat barei nu se cere la nesfârșit.
+
+    În jurnal se vede o singură zonă de lucru, (0, 0, 2560, 1392) pe un monitor de 1440,
+    pentru care bara s-a reînregistrat din minut în minut de la 19:41 până la sfârșitul
+    jurnalului: 100 de încercări, 100 de rânduri identice, niciun efect.
+    """
+
+    def test_the_first_tries_are_worth_it(self):
+        self.assertFalse(keeps_refusing(0))
+        self.assertFalse(keeps_refusing(GUARD_GIVE_UP - 1))
+
+    def test_after_enough_tries_we_stop(self):
+        self.assertTrue(keeps_refusing(GUARD_GIVE_UP))
+        self.assertTrue(keeps_refusing(100))
+
+    def test_the_whole_log_would_cost_a_handful_of_tries(self):
+        """Socoteala pazei: aceeași zonă de lucru, oricât de des măsurată, se încearcă de GUARD_GIVE_UP ori."""
+        monitor = (0, 0, 2560, 1440)
+        lost = (0, 0, 2560, 1392)  # doar taskbar-ul, nimic pentru bară
+        fails, area, tries, warnings = 0, None, 0, 0
+        for work in [lost] * 100:
+            if not reservation_missing("top", 34, work, monitor):
+                fails, area = 0, None
+                continue
+            if area != (work, monitor):
+                area, fails = (work, monitor), 0
+            if keeps_refusing(fails):
+                continue
+            fails += 1
+            tries += 1
+            warnings += fails == 1
+        self.assertEqual(tries, GUARD_GIVE_UP)
+        self.assertEqual(warnings, 1)
+
+    def test_a_new_work_area_is_a_new_chance(self):
+        """Un program iese din fullscreen, taskbar-ul revine: situație nouă, se încearcă iar."""
+        monitor = (0, 0, 2560, 1440)
+        fails, area, tries = GUARD_GIVE_UP, ((0, 0, 2560, 1392), monitor), 0
+        for work in ((0, 0, 2560, 1440), (0, 0, 2560, 1392)):
+            if area != (work, monitor):
+                area, fails = (work, monitor), 0
+            if not keeps_refusing(fails):
+                fails += 1
+                tries += 1
+        self.assertEqual(tries, 2)
+
+    def test_the_bar_comes_back_and_the_count_is_cleared(self):
+        monitor = (0, 0, 2560, 1440)
+        self.assertFalse(reservation_missing("top", 34, (0, 34, 2560, 1392), monitor))
+
+
+class TestAScreenQtDeleted(unittest.TestCase):
+    """
+    La schimbarea monitoarelor, paza ajungea la un ecran pe care Qt îl ștersese.
+
+    În jurnal, la 09:49:37: „RuntimeError: wrapped C/C++ object of type QScreen has been
+    deleted”, chiar după „Screens updated. Re-initialising all bars”.
+    """
+
+    class Alive:
+        def devicePixelRatio(self):  # noqa: N802 — numele vine din Qt (QScreen)
+            return 1.5
+
+    class Deleted:
+        def devicePixelRatio(self):  # noqa: N802 — numele vine din Qt (QScreen)
+            raise RuntimeError("wrapped C/C++ object of type QScreen has been deleted")
+
+    def test_a_real_screen_is_used(self):
+        self.assertTrue(screen_alive(self.Alive()))
+
+    def test_a_deleted_screen_is_left_alone(self):
+        self.assertFalse(screen_alive(self.Deleted()))
+
+    def test_no_screen_at_all(self):
+        self.assertFalse(screen_alive(None))
+
+
+class TestOneWindowOneBar(unittest.TestCase):
+    """
+    O fereastră o corectează doar bara de pe monitorul ei.
+
+    Cu `screens: ["*"]` sunt trei bare, fiecare cu propriul window_fix. În jurnal
+    (10-24, 10:52:40) se vede aceeași fereastră a lui „nvidia app" mutată de nouă ori
+    într-o secundă, apoi trei rânduri „nu mai incerc" în loc de unul: pragul de renunțare
+    ajungea de trei ori mai mare decât cel din cod.
+    """
+
+    def test_my_monitor_my_window(self):
+        self.assertTrue(mine_to_fix(7, 7))
+
+    def test_another_monitor_is_another_bar_s_job(self):
+        self.assertFalse(mine_to_fix(7, 9))
+
+    def test_an_unknown_monitor_changes_nothing(self):
+        # fără un monitor cunoscut ne purtăm ca înainte: corectăm, nu refuzăm
+        self.assertTrue(mine_to_fix(0, 9))
+        self.assertTrue(mine_to_fix(7, 0))
+
+    def test_three_bars_correct_a_window_once(self):
+        bars = (11, 22, 33)  # trei bare, trei monitoare
+        window = 22
+        self.assertEqual(sum(mine_to_fix(window, bar) for bar in bars), 1)
 
 
 
