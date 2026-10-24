@@ -33,6 +33,7 @@ from mint_check import (  # noqa: E402
     SRC,
     Report,
     contract_problems,
+    patch_problems,
     css_used_names,
     duplicate_keys,
     hardcoded_colours,
@@ -147,6 +148,24 @@ def check_contract(yasb: Path | None) -> Report:
         r.note("toate numele pe care ne sprijinim sunt la locul lor")
     if notes:
         r.note("Rulează doctorul cu aceeași versiune de Python cu care pornește bara (py -3.14).")
+    return r
+
+
+def check_patches(yasb: Path | None) -> Report:
+    """Peticele puse in sursa YASB mai sunt acolo dupa instalare?"""
+    r = Report("Peticele din sursa YASB")
+    if yasb is None:
+        r.note("YASB nu a fost dat (--yasb): peticele nu s-au putut verifica")
+        return r
+    src = yasb / "src"
+    if not src.is_dir():
+        r.problem(f"{src} nu exista: nu pot citi codul YASB.")
+        return r
+    problems, notes = patch_problems(src)
+    for item in notes:
+        r.note(item)
+    for item in problems:
+        r.problem(item)
     return r
 
 
@@ -318,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         check_python(),
         check_yasb_version(yasb),
         check_contract(yasb),
+        check_patches(yasb),
         check_config(cfg, yasb, config_text),
         check_styles(config_dir),
         check_tools(),

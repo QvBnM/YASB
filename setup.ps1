@@ -153,7 +153,12 @@ $mintOut = & py -3.14 (Join-Path $here "tools\mint_install.py") --yasb $YasbPath
 if ($LASTEXITCODE -ne 0) { $mintOut | ForEach-Object { Warn $_ }; throw "Nu am putut copia widget-urile (vezi mesajul de mai sus)." }
 $mintOut | Where-Object { $_ -match "fisiere copiate|Lansator" } | ForEach-Object { Ok $_ }
 $patchOut = & py -3.14 (Join-Path $here "tools\yasb_patch.py") $YasbPath
+$patchExit = $LASTEXITCODE
 foreach ($line in @($patchOut)) { if ($line -like "*patched*") { Ok $line } else { Warn $line } }
+# Peticul din main.py nu e un moft: fara el qasync ia PyQt5 daca alt program l-a instalat, si
+# bara nu mai porneste deloc. Pana acum un petic neaplicat era doar un rand galben, iar
+# instalarea mergea inainte inca doua minute, ca sa porneasca la final o bara care nu apare.
+if ($patchExit -ne 0) { throw "Peticul din main.py nu s-a aplicat (vezi rindul galben de mai sus). YASB s-a schimbat acolo unde ne sprijinim." }
 
 # ---------- 6. Dependente ----------
 Step "Instalez dependentele YASB (dureaza 1-2 minute)"

@@ -438,6 +438,54 @@ class _Source:
         return members
 
 
+# Peticele pe care setup.ps1 le pune in sursa YASB. Marcajele se iau din unealta care le pune,
+# ca sa nu existe doua liste care se pot departa una de alta.
+#
+# De ce se verifica: setup.ps1 da "git checkout --" peste main.py si bar.py la fiecare instalare
+# (ca sa poata schimba versiunea), apoi le repune. Daca repunerea nu reuseste — YASB si-a mutat
+# un rand — yasb_patch.py scria doar un rand galben si instalarea merge inainte. Peticul din
+# main.py nu e un moft: fara el, qasync ia PyQt5 daca alt program l-a instalat, si bara nu mai
+# porneste deloc.
+
+
+def _patch_markers() -> dict[str, tuple[str, str, bool]]:
+    """Pentru fiecare fisier petecit: (marcaj, ce face, oprește instalarea daca lipsește)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("yasb_patch", REPO / "tools" / "yasb_patch.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return {
+        "main.py": (mod.MAIN_MARKER, "qasync e legat de PyQt6", True),
+        "core/bar.py": (mod.MARKER, "ceasul sta la mijlocul barei", False),
+    }
+
+
+def patch_problems(yasb_src: Path) -> tuple[list[str], list[str]]:
+    """Peticele noastre mai sunt in sursa YASB instalata? Intoarce (probleme, observatii)."""
+    problems: list[str] = []
+    notes: list[str] = []
+    for relative, (marker, what, fatal) in _patch_markers().items():
+        path = yasb_src / relative
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            # un fisier lipsa e deja raportat de contract_problems: nu-l numaram de doua ori
+            why = f"nu pot citi {relative} din YASB ({exc.strerror or exc})"
+            (problems if fatal else notes).append(why)
+            continue
+        if marker in text:
+            notes.append(f"{relative}: peticul e la locul lui ({what})")
+        elif fatal:
+            problems.append(
+                f"{relative} nu e petecit: {what} — rulează din nou instalarea "
+                f"(fără el, bara poate să nu porneasca pe un PC cu PyQt5)"
+            )
+        else:
+            notes.append(f"{relative} nu e petecit: {what} nu se aplica")
+    return problems, notes
+
+
 def contract_problems(yasb_src: Path) -> tuple[list[str], list[str]]:
     """
     Ce anume din YASB nu mai e acolo unde bara se așteaptă.
